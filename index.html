@@ -1,0 +1,1582 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>DroneTM to Eve Converter</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a two-column workbench. Left: source file and options. Right: survey-style plan view of the route, then the converted output. */
+  :root {
+    --bg: #EAF0F0;
+    --surface: #F9FBFB;
+    --plan: #F1F6F6;
+    --tint: #E0EFEE;
+    --ink: #16262A;
+    --muted: #566A6F;
+    --line: #C9D5D7;
+    --accent: #0A7B76;
+    --accent-ink: #FFFFFF;
+    --warn: #8A5200;
+    --warn-bg: #FBF0D9;
+    --font-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+    --font-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0E1A1D;
+      --surface: #142226;
+      --plan: #0F1B1E;
+      --tint: #14302F;
+      --ink: #E2ECEE;
+      --muted: #8FA4A9;
+      --line: #27393E;
+      --accent: #3FC1B5;
+      --accent-ink: #06201E;
+      --warn: #E7B45E;
+      --warn-bg: #2A2312;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1A1D;
+    --surface: #142226;
+    --plan: #0F1B1E;
+    --tint: #14302F;
+    --ink: #E2ECEE;
+    --muted: #8FA4A9;
+    --line: #27393E;
+    --accent: #3FC1B5;
+    --accent-ink: #06201E;
+    --warn: #E7B45E;
+    --warn-bg: #2A2312;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 15px/1.5 var(--font-body);
+    padding-block: 28px 56px;
+    padding-inline: 16px;
+  }
+  .wrap { max-width: 1120px; margin-inline: auto; }
+
+  .head h1 {
+    margin: 0;
+    font: 600 clamp(36px, 7vw, 56px)/1 var(--font-display);
+    letter-spacing: 0.01em;
+    text-wrap: balance;
+  }
+  .head h1 .to { color: var(--accent); }
+  .head p { margin: 12px 0 0; color: var(--muted); max-width: 62ch; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: 20px;
+    margin-top: 28px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  .col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 18px;
+    min-width: 0;
+  }
+  .ph {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 0 0 14px;
+    font: 600 21px/1 var(--font-display);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+  .ph .n { font: 500 12px var(--font-mono); color: var(--accent); letter-spacing: 0; }
+
+  /* source */
+  .drop {
+    position: relative;
+    display: grid;
+    gap: 4px;
+    padding: 16px;
+    border: 1.5px dashed var(--line);
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: var(--tint); }
+  .drop:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .drop input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .drop strong { font-weight: 600; }
+  .drop span { color: var(--muted); font-size: 14px; }
+  .status { margin: 10px 0 0; font: 400 13px/1.45 var(--font-mono); color: var(--muted); overflow-wrap: anywhere; }
+  .status.bad { color: var(--warn); background: var(--warn-bg); padding: 8px 10px; border-radius: 3px; font-family: var(--font-body); font-size: 14px; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--accent); font-weight: 500; }
+  summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  details textarea { margin-top: 8px; }
+
+  /* controls */
+  .fields { display: grid; gap: 18px; }
+  .field { display: grid; gap: 6px; min-width: 0; }
+  .field > label { font-weight: 500; }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .hint { margin: 0; color: var(--muted); font-size: 13px; }
+  .tick { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+  .tick input { flex: none; width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); }
+  .ctl {
+    width: 100%;
+    min-height: 40px;
+    padding: 8px 10px;
+    font: inherit;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+  }
+  .ctl:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+  textarea.ctl { font: 400 12px/1.5 var(--font-mono); min-height: 0; resize: vertical; }
+
+  .suggest { display: grid; gap: 8px; margin-top: 4px; padding: 12px; background: var(--tint); border-radius: 3px; }
+  .srow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+  .slabel { font: 500 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  #sugVal { margin-left: 10px; font: 600 26px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+  .check { margin: 0; font-size: 14px; font-weight: 500; color: var(--accent); }
+  .check.warn { color: var(--warn); background: var(--warn-bg); padding: 6px 8px; border-radius: 3px; }
+  #limitWarn { margin: 0 0 10px; }
+
+  /* results */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 1px;
+    margin: 0;
+    background: var(--line);
+    border: 1px solid var(--line);
+  }
+  .stat { background: var(--surface); padding: 10px 12px; min-width: 0; }
+  .stat dt { font: 500 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .stat dd { white-space: nowrap; margin: 2px 0 0; font: 600 28px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+  .stat dd small { font: 500 12px var(--font-mono); color: var(--muted); margin-left: 4px; }
+
+  .cmp { margin-right: auto; align-items: center; }
+  .cmp input { margin: 0; }
+  .plantools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; margin-top: 16px; }
+  .zoom { display: flex; gap: 6px; }
+  .zbtn { min-width: 40px; min-height: 40px; padding: 0 12px; font: 600 18px var(--font-body); color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 3px; cursor: pointer; }
+  .zbtn.fit { font-size: 14px; }
+  .zbtn:focus-visible, .plan:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  .plan { position: relative; margin-top: 8px; height: clamp(320px, 62vw, 480px); overflow: hidden; border: 1px solid var(--line); background: var(--plan); cursor: grab; user-select: none; -webkit-user-select: none; touch-action: pan-y; }
+  .plan.drag { cursor: grabbing; }
+  .plan svg { display: block; width: 100%; height: 100%; }
+  .plan .grid-line { stroke: var(--line); stroke-width: 1; }
+  .plan .route { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; opacity: 0.55; }
+  .plan .route2 { stroke-dasharray: 6 4; opacity: 0.8; }
+  .plan .arrow { fill: var(--accent); }
+  .plan .pt-photo { fill: var(--accent); }
+  .plan .pt-none { fill: var(--plan); stroke: var(--ink); stroke-width: 1.5; }
+  .plan .ring { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+  .plan .orig { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 3 3; stroke-linejoin: round; }
+  .plan .pt-orig { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+  .plan .sel { fill: none; stroke: var(--ink); stroke-width: 2; }
+  .plan .scale { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+  .plan .north { fill: var(--ink); }
+  .plan text { fill: var(--muted); font: 500 10px var(--font-mono); letter-spacing: 0.04em; stroke: var(--plan); stroke-width: 3px; paint-order: stroke; stroke-linejoin: round; }
+  .plan text.dark { fill: var(--ink); }
+  .readout { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; margin: 12px 0 0; }
+  .readout dt { align-self: center; font: 500 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); white-space: nowrap; }
+  .readout dd { margin: 0; font: 400 13px/1.4 var(--font-mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 6px 18px;
+    margin: 8px 0 0; font: 400 12px var(--font-mono); color: var(--muted);
+  }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .legend .f { background: var(--accent); }
+  .legend .o { border: 1.5px solid var(--ink); }
+  .legend .g { width: 8px; height: 8px; border: 1.5px solid var(--muted); }
+  .legend .d { width: 16px; height: 0; border-radius: 0; border-top: 2px dashed var(--accent); vertical-align: 3px; }
+
+  .outhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 20px; }
+  .fname { font: 500 14px var(--font-mono); overflow-wrap: anywhere; }
+  .fname span { color: var(--muted); font-weight: 400; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn {
+    min-height: 40px; padding: 8px 16px;
+    font: 600 14px var(--font-body);
+    border: 1px solid var(--accent); border-radius: 3px; cursor: pointer;
+  }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.ghost { background: transparent; color: var(--accent); }
+  .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  #out { margin-top: 10px; white-space: pre; overflow: auto; height: 120px; }
+  .msg { min-height: 1.5em; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+  .empty { margin: 0; color: var(--muted); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .drop, .btn { transition: background-color 0.15s, border-color 0.15s; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <h1>DroneTM <span class="to">to</span> Eve</h1>
+    <p>Converts a Potensic Atom 2 Drone Tasking Manager flight plan into a <code>waypoints.json</code> that is compatible with Potensic Eve on iOS.</p>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <section class="panel" aria-labelledby="h-source">
+        <h2 class="ph" id="h-source"><span class="n">1</span>DroneTM file</h2>
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept=".json,application/json,text/plain">
+          <strong>Drop a DroneTM .json file here, or choose one</strong>
+        </label>
+        <p class="status" id="status" aria-live="polite"></p>
+        <details>
+          <summary>Paste the JSON instead</summary>
+          <textarea class="ctl" id="paste" rows="5" spellcheck="false" aria-label="Pasted DroneTM JSON"></textarea>
+          <p style="margin:8px 0 0"><button class="btn ghost" type="button" id="usePaste">Use pasted text</button></p>
+        </details>
+      </section>
+
+      <section class="panel" aria-labelledby="h-opts">
+        <h2 class="ph" id="h-opts"><span class="n">2</span>Options</h2>
+        <div class="fields" id="opts">
+          <div class="field">
+            <label for="speed">Speed, m/s</label>
+            <input class="ctl" id="speed" type="number" min="0.5" max="30" step="0.05" inputmode="decimal" placeholder="5">
+            <p class="hint" id="speedHint">Leave empty to keep the speed saved in the DroneTM file.</p>
+            <div class="suggest" id="suggest" hidden>
+              <div class="srow">
+                <div><span class="slabel">Suggested speed</span><strong id="sugVal"></strong></div>
+                <button class="btn ghost" type="button" id="useSug">Use this speed</button>
+              </div>
+              <p class="hint" id="sugWhy"></p>
+              <p class="check" id="sugCheck" aria-live="polite"></p>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="heightMode">Height</label>
+            <div class="row">
+              <select class="ctl" id="heightMode">
+                <option value="keep">Keep each point's height</option>
+                <option value="fixed">One height for every point</option>
+              </select>
+              <input class="ctl" id="fixedHeight" type="number" min="2" max="500" step="1" value="70" aria-label="Height in metres for every point" hidden>
+            </div>
+            <p class="hint" id="heightHint"></p>
+          </div>
+
+          <div class="field">
+            <label class="tick" for="cross"><input type="checkbox" id="cross"> Crosshatch: add a second pass at 90°</label>
+            <p class="hint" id="crossHint"></p>
+          </div>
+
+          <div class="field">
+            <label class="tick" for="oblique"><input type="checkbox" id="oblique" disabled> Oblique correction</label>
+            <p class="hint" id="obliqueHint">Available when the gimbal pitch in your DroneTM file is -45°.</p>
+          </div>
+
+        </div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel" aria-labelledby="h-res">
+        <h2 class="ph" id="h-res"><span class="n">3</span>Eve waypoints</h2>
+
+        <p class="empty" id="empty">Load a DroneTM file to see the route and the converted waypoints.</p>
+
+        <div id="results" hidden>
+          <p class="check warn" id="limitWarn" role="alert" hidden></p>
+          <dl class="stats" id="stats"></dl>
+          <div class="plantools">
+            <label class="tick cmp" for="cmp"><input type="checkbox" id="cmp" disabled> Show original route</label>
+            <div class="zoom" role="group" aria-label="Zoom">
+              <button class="zbtn" type="button" id="zin" aria-label="Zoom in">+</button>
+              <button class="zbtn" type="button" id="zout" aria-label="Zoom out">&minus;</button>
+              <button class="zbtn fit" type="button" id="zfit">Fit</button>
+            </div>
+          </div>
+          <div class="plan" id="plan" tabindex="0" role="group" aria-label="Route plan. Drag to pan, scroll or use plus and minus to zoom, arrow keys to move, 0 to fit.">
+            <svg id="planSvg" aria-hidden="true"></svg>
+          </div>
+          <p class="legend" id="legend"></p>
+          <dl class="readout" id="readout"></dl>
+          <p class="hint">Drag to pan and scroll to zoom. Click a point to read its Easting, Northing and height.</p>
+
+          <div class="outhead">
+            <div class="fname">waypoints.json <span id="size"></span></div>
+            <div class="actions">
+              <button class="btn primary" type="button" id="save" hidden>Save waypoints.json</button>
+              <button class="btn ghost" type="button" id="copy">Copy JSON</button>
+              <button class="btn ghost" type="button" id="saveKml">Save KML</button>
+            </div>
+          </div>
+          <textarea class="ctl" id="out" readonly spellcheck="false" aria-label="Converted waypoints JSON"></textarea>
+          <p class="msg" id="msg" aria-live="polite"></p>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  </div>
+
+
+<script>
+/* ---- Conversion core: DroneTM mission -> Potensic Eve waypoints ---- */
+
+/* DroneTM exports can carry text after the list (the sample ends with ";[]").
+   Read the first complete top-level array and ignore anything after it. */
+function parseDroneTM(text) {
+  var t = String(text).replace(/^﻿/, '').trim();
+  var value, trimmed = false;
+  try {
+    value = JSON.parse(t);
+  } catch (e) {
+    var start = t.indexOf('[');
+    if (start < 0) throw new Error('No waypoint list found. The file should start with [ and hold one object per waypoint.');
+    var depth = 0, inStr = false, esc = false, end = -1;
+    for (var i = start; i < t.length; i++) {
+      var c = t[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === '\\') esc = true;
+        else if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') inStr = true;
+      else if (c === '[') depth++;
+      else if (c === ']') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end < 0) throw new Error('The waypoint list is cut off before its closing bracket. Export the plan again.');
+    try {
+      value = JSON.parse(t.slice(start, end + 1));
+    } catch (e2) {
+      throw new Error('The waypoint list is not valid JSON: ' + e2.message);
+    }
+    trimmed = true;
+  }
+  if (!Array.isArray(value) || value.length === 0) throw new Error('The file has no waypoints.');
+  if (value[0] && typeof value[0] === 'object' && 'wp_lat' in value[0]) {
+    throw new Error('This file is already in Eve format (it has wp_lat and wp_lon). Drop a DroneTM file instead.');
+  }
+  for (var k = 0; k < value.length; k++) {
+    var p = value[k];
+    if (!p || typeof p !== 'object' || !isFinite(p.lat) || !isFinite(p.lng)) {
+      throw new Error('Waypoint ' + (k + 1) + ' has no numeric lat and lng, so it does not look like a DroneTM waypoint.');
+    }
+  }
+  return { points: value, trimmed: trimmed };
+}
+
+function round(n, d) {
+  var f = Math.pow(10, d);
+  return Math.round(n * f) / f;
+}
+
+/* opts:
+   speed        number | null   m/s; null keeps the speed stored in the file
+   heightMode   'keep' | 'fixed'
+   fixedHeight  number          metres, used when heightMode is 'fixed'
+   noActionCode 0 | 1           Eve wp_action for waypoints that take no photo
+   yawMode      'route' | 'fixed'
+   yawFixedType number          Eve wp_yaw_type value for a fixed heading */
+function convert(points, opts) {
+  var o = opts || {};
+  var speed = (o.speed != null && isFinite(o.speed) && o.speed > 0) ? o.speed : (isFinite(points[0].speed) ? points[0].speed : 5);
+  var noAction = o.noActionCode === 1 ? 1 : 0;
+  var unknownActions = {};
+  var out = points.map(function (p) {
+    var action;
+    if (o.allPhotos || p.action === 'PHOTO') action = 1;
+    else if (p.action === 'NONE' || p.action == null) action = noAction;
+    else { action = noAction; unknownActions[p.action] = (unknownActions[p.action] || 0) + 1; }
+
+    var height = o.heightMode === 'fixed'
+      ? (isFinite(o.fixedHeight) ? o.fixedHeight : 70)
+      : round(isFinite(p.height) ? p.height : 70, 1);
+
+    var yawType = 0, yawCustom = 0;
+    if (o.yawMode === 'fixed') {
+      yawType = isFinite(o.yawFixedType) ? o.yawFixedType : 1;
+      yawCustom = isFinite(p.yaw) ? p.yaw : 0;
+    }
+
+    return {
+      global_speed: speed,
+      snapshootFile: '',
+      wp_speed: speed,
+      wp_speed_type: 0,
+      wp_yaw_custom: yawCustom,
+      wp_gimbal_type: 2,
+      wp_yaw_type: yawType,
+      wp_hover_time: isFinite(p.hoverTime) ? p.hoverTime : 0,
+      wp_action: action,
+      wp_zoom_type: 0,
+      wp_height: height,
+      wp_yaw_interest: 0,
+      isHaveAltitude: false,
+      wp_zoom_ratio: isFinite(p.zoomRatio) ? p.zoomRatio : 1,
+      isFromSave: true,
+      wp_gimbal_pitch_custom: isFinite(p.gimbalPitch) ? p.gimbalPitch : -90,
+      wp_lon: round(p.lng, 7),
+      wp_lat: round(p.lat, 7),
+      wp_altitude: 0,
+      addPointWay: 0
+    };
+  });
+  return { waypoints: out, speed: speed, unknownActions: unknownActions };
+}
+
+function haversine(a, b) {
+  var R = 6371008.8, rad = Math.PI / 180;
+  var dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+  var s = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+function missionStats(points, speed) {
+  var length = 0, photos = 0, hmin = Infinity, hmax = -Infinity, hover = 0;
+  for (var i = 0; i < points.length; i++) {
+    var p = points[i];
+    if (i > 0) length += haversine(points[i - 1], p);
+    if (p.action === 'PHOTO') photos++;
+    if (isFinite(p.height)) { hmin = Math.min(hmin, p.height); hmax = Math.max(hmax, p.height); }
+    if (isFinite(p.hoverTime)) hover += p.hoverTime;
+  }
+  return {
+    count: points.length,
+    photos: photos,
+    length: length,
+    seconds: length / speed + hover,
+    hmin: hmin === Infinity ? null : hmin,
+    hmax: hmax === -Infinity ? null : hmax
+  };
+}
+
+/* UTM zone and hemisphere for a position, e.g. { zone: 20, south: false, label: '20N' }.
+   Standard 6 degree zones, with the Norway and Svalbard exceptions. */
+function utmZone(lat, lng) {
+  var lon = ((lng + 180) % 360 + 360) % 360 - 180;
+  var zone = Math.floor((lon + 180) / 6) + 1;
+  if (lat >= 56 && lat < 64 && lon >= 3 && lon < 12) zone = 32;
+  else if (lat >= 72 && lat < 84) {
+    if (lon >= 0 && lon < 9) zone = 31;
+    else if (lon >= 9 && lon < 21) zone = 33;
+    else if (lon >= 21 && lon < 33) zone = 35;
+    else if (lon >= 33 && lon < 42) zone = 37;
+  }
+  if (zone > 60) zone = 60;
+  var south = lat < 0;
+  return { zone: zone, south: south, label: zone + (south ? 'S' : 'N') };
+}
+
+/* WGS84 / UTM in the given zone (central meridian 6 * zone - 183), Krueger series.
+   Returns { e, n }: Easting and Northing in metres, with the 10 000 000 m
+   false Northing in the southern hemisphere. */
+function utm(lat, lng, z) {
+  var a = 6378137, f = 1 / 298.257223563, k0 = 0.9996, E0 = 500000, lon0 = 6 * z.zone - 183;
+  var n = f / (2 - f), n2 = n * n, n3 = n2 * n, n4 = n3 * n;
+  var A = a / (1 + n) * (1 + n2 / 4 + n4 / 64);
+  var al = [
+    n / 2 - 2 * n2 / 3 + 5 * n3 / 16 + 41 * n4 / 180,
+    13 * n2 / 48 - 3 * n3 / 5 + 557 * n4 / 1440,
+    61 * n3 / 240 - 103 * n4 / 140,
+    49561 * n4 / 161280
+  ];
+  var rad = Math.PI / 180, s = Math.sin(lat * rad), dl = (((lng - lon0 + 180) % 360 + 360) % 360 - 180) * rad;
+  var c = 2 * Math.sqrt(n) / (1 + n);
+  var t = Math.sinh(Math.atanh(s) - c * Math.atanh(c * s));
+  var xi0 = Math.atan2(t, Math.cos(dl));
+  var eta0 = Math.asinh(Math.sin(dl) / Math.hypot(t, Math.cos(dl)));
+  var xi = xi0, eta = eta0;
+  for (var j = 1; j <= 4; j++) {
+    xi += al[j - 1] * Math.sin(2 * j * xi0) * Math.cosh(2 * j * eta0);
+    eta += al[j - 1] * Math.cos(2 * j * xi0) * Math.sinh(2 * j * eta0);
+  }
+  return { e: E0 + k0 * A * eta, n: k0 * A * xi + (z.south ? 10000000 : 0) };
+}
+
+/* Inverse of utm(): Easting and Northing in a zone back to WGS84 { lat, lng } (Krueger series). */
+function utmInverse(e, nn, z) {
+  var a = 6378137, f = 1 / 298.257223563, k0 = 0.9996, E0 = 500000, lon0 = 6 * z.zone - 183;
+  var n = f / (2 - f), n2 = n * n, n3 = n2 * n, n4 = n3 * n;
+  var A = a / (1 + n) * (1 + n2 / 4 + n4 / 64);
+  var be = [
+    n / 2 - 2 * n2 / 3 + 37 * n3 / 96 - n4 / 360,
+    n2 / 48 + n3 / 15 - 437 * n4 / 1440,
+    17 * n3 / 480 - 37 * n4 / 840,
+    4397 * n4 / 161280
+  ];
+  var de = [
+    2 * n - 2 * n2 / 3 - 2 * n3 + 116 * n4 / 45,
+    7 * n2 / 3 - 8 * n3 / 5 - 227 * n4 / 45,
+    56 * n3 / 15 - 136 * n4 / 35,
+    4279 * n4 / 630
+  ];
+  var xi = (nn - (z.south ? 10000000 : 0)) / (k0 * A), eta = (e - E0) / (k0 * A);
+  var xi0 = xi, eta0 = eta;
+  for (var j = 1; j <= 4; j++) {
+    xi0 -= be[j - 1] * Math.sin(2 * j * xi) * Math.cosh(2 * j * eta);
+    eta0 -= be[j - 1] * Math.cos(2 * j * xi) * Math.sinh(2 * j * eta);
+  }
+  var chi = Math.asin(Math.sin(xi0) / Math.cosh(eta0)), lat = chi;
+  for (j = 1; j <= 4; j++) lat += de[j - 1] * Math.sin(2 * j * chi);
+  var rad = Math.PI / 180;
+  return { lat: lat / rad, lng: lon0 + Math.atan2(Math.sinh(eta0), Math.cos(xi0)) / rad };
+}
+
+/* Distance between consecutive waypoints that both take a photo (action PHOTO).
+   Turn points and the legs between lines take no photo, so they set no limit.
+   Returns { min, max, count } in metres, or null when no such pair exists. */
+function photoSpacing(points) {
+  var d = [];
+  for (var i = 0; i < points.length - 1; i++) {
+    if (points[i].action === 'PHOTO' && points[i + 1].action === 'PHOTO') d.push(haversine(points[i], points[i + 1]));
+  }
+  if (!d.length) return null;
+  var min = Infinity, max = -Infinity;
+  d.forEach(function (x) { if (x < min) min = x; if (x > max) max = x; });
+  return { min: min, max: max, count: d.length };
+}
+
+/* Smooth height surface through the heights of a plan (thin-plate spline with a little smoothing).
+   xy: [{x, y}] in metres, h: heights. Returns function (x, y) -> height, or null when the points cannot define a surface. */
+function heightSurface(xy, h, smooth) {
+  var n = xy.length, i, j, k;
+  if (n < 4) return null;
+  var lam = smooth == null ? 0.01 : smooth;
+  var x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  xy.forEach(function (p) { if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x; if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y; });
+  var cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, sc = Math.max((x1 - x0) / 2, (y1 - y0) / 2, 1);
+  var X = xy.map(function (p) { return [(p.x - cx) / sc, (p.y - cy) / sc]; });
+  function phi(r) { return r > 1e-12 ? r * r * Math.log(r) : 0; }
+  var m = n + 3, A = [];
+  for (i = 0; i < m; i++) A.push(new Array(m + 1).fill(0));
+  for (i = 0; i < n; i++) {
+    for (j = 0; j < n; j++) A[i][j] = i === j ? lam : phi(Math.hypot(X[i][0] - X[j][0], X[i][1] - X[j][1]));
+    A[i][n] = 1; A[i][n + 1] = X[i][0]; A[i][n + 2] = X[i][1];
+    A[n][i] = 1; A[n + 1][i] = X[i][0]; A[n + 2][i] = X[i][1];
+    A[i][m] = h[i];
+  }
+  /* Gaussian elimination with partial pivoting */
+  for (k = 0; k < m; k++) {
+    var piv = k;
+    for (i = k + 1; i < m; i++) if (Math.abs(A[i][k]) > Math.abs(A[piv][k])) piv = i;
+    if (Math.abs(A[piv][k]) < 1e-12) return null;
+    var tmp = A[k]; A[k] = A[piv]; A[piv] = tmp;
+    for (i = k + 1; i < m; i++) {
+      var f = A[i][k] / A[k][k];
+      if (f === 0) continue;
+      for (j = k; j <= m; j++) A[i][j] -= f * A[k][j];
+    }
+  }
+  var sol = new Array(m).fill(0);
+  for (i = m - 1; i >= 0; i--) {
+    var acc = A[i][m];
+    for (j = i + 1; j < m; j++) acc -= A[i][j] * sol[j];
+    sol[i] = acc / A[i][i];
+  }
+  return function (x, y) {
+    var qx = (x - cx) / sc, qy = (y - cy) / sc, v = sol[n] + sol[n + 1] * qx + sol[n + 2] * qy;
+    for (var q = 0; q < n; q++) v += sol[q] * phi(Math.hypot(qx - X[q][0], qy - X[q][1]));
+    return v;
+  };
+}
+
+/* Height model for new waypoints: a thin-plate spline fitted to the heights of the plan's own waypoints (P holds their local metres).
+   Where a point sits on an original waypoint it takes that waypoint's height; estimates stay within 2 m of the original range.
+   Returns { has, at(x, y) }; at() gives undefined when the plan carries no heights. */
+function heightModel(points, P) {
+  var n = points.length, i;
+  var hIdx = [], hLo = Infinity, hHi = -Infinity;
+  for (i = 0; i < n; i++) {
+    if (!isFinite(points[i].height)) continue;
+    hIdx.push(i);
+    if (points[i].height < hLo) hLo = points[i].height;
+    if (points[i].height > hHi) hHi = points[i].height;
+  }
+  var hasH = hIdx.length > 0;
+  var surf = hIdx.length >= 4 ? heightSurface(hIdx.map(function (q) { return P[q]; }), hIdx.map(function (q) { return points[q].height; }), 0.001) : null;
+  function at(x, y) {
+    if (!hasH) return undefined;
+    var c = hIdx.map(function (q) { return { d: Math.hypot(P[q].x - x, P[q].y - y), h: points[q].height }; });
+    c.sort(function (m, o) { return m.d - o.d; });
+    if (c[0].d < 1) return round(c[0].h, 1);
+    var v;
+    if (surf) v = surf(x, y);
+    else {   /* too few heights for a surface: inverse-distance average of the nearest */
+      var ws = 0, hs = 0;
+      c.slice(0, 8).forEach(function (m) { var wgt = 1 / (m.d * m.d); ws += wgt; hs += wgt * m.h; });
+      v = hs / ws;
+    }
+    return round(Math.min(Math.max(v, hLo - 2), hHi + 2), 1);
+  }
+  return { has: hasH, at: at };
+}
+
+/* Crosshatch: a second pass at 90 degrees to the survey lines, flown on from the End waypoint.
+   Works out the line direction, the pitch between lines and the photo spacing from the plan itself,
+   then adds new waypoints. Heights come from a smooth surface fitted to the heights of the original waypoints.
+   Returns { points: [new DroneTM waypoints], info } or { error: 'why not' }. */
+function crosshatch(points, opts) {
+  var o = opts || {}, extPhotos = o.extendPhotos == null ? 0 : o.extendPhotos, extraLines = o.extraLines || 0, shift = o.shift || 0, centred = !!o.centred, dropLeadOut = !!o.dropLeadOut;
+  var n = points.length, i, k;
+  if (n < 4) return { error: 'Crosshatch needs a plan with at least two parallel passes.' };
+
+  /* local metres: x east, y north, from the mean position */
+  var lat0 = 0, lng0 = 0;
+  points.forEach(function (p) { lat0 += p.lat / n; lng0 += p.lng / n; });
+  var rad = Math.PI / 180, e2 = 0.00669437999014, a = 6378137, sphi = Math.sin(lat0 * rad), w = Math.sqrt(1 - e2 * sphi * sphi);
+  var mLat = a * (1 - e2) / (w * w * w) * rad, mLng = a / w * Math.cos(lat0 * rad) * rad;
+  var P = points.map(function (p) { return { x: (p.lng - lng0) * mLng, y: (p.lat - lat0) * mLat }; });
+
+  /* direction of the survey lines: the dominant leg direction, ignoring the turns */
+  var legs = [];
+  for (i = 0; i < n - 1; i++) {
+    var dx = P[i + 1].x - P[i].x, dy = P[i + 1].y - P[i].y;
+    legs.push({ len: Math.hypot(dx, dy), th: Math.atan2(dy, dx) });
+  }
+  function axisOf(set) {
+    var sx = 0, sy = 0;
+    set.forEach(function (l) { sx += l.len * Math.cos(2 * l.th); sy += l.len * Math.sin(2 * l.th); });
+    return 0.5 * Math.atan2(sy, sx);
+  }
+  function angDiff(th, al) { var d = th - al; d -= Math.PI * Math.round(d / Math.PI); return Math.abs(d); }
+  var moving = legs.filter(function (l) { return l.len > 0.5; });
+  if (!moving.length) return { error: 'Crosshatch needs a plan with at least two parallel passes.' };
+  var alpha = axisOf(moving), TOL = 15 * rad;
+  for (k = 0; k < 3; k++) {
+    var near = moving.filter(function (l) { return angDiff(l.th, alpha) < TOL; });
+    if (!near.length) break;
+    alpha = axisOf(near);
+  }
+  var ux = Math.cos(alpha), uy = Math.sin(alpha), vx = -uy, vy = ux;   /* u runs along the lines, v across them */
+  var S = P.map(function (p) { return p.x * ux + p.y * uy; });
+  var T = P.map(function (p) { return p.x * vx + p.y * vy; });
+
+  /* passes: runs of points joined by legs that follow the line direction */
+  var runs = [], cur = [0];
+  for (i = 0; i < n - 1; i++) {
+    if (legs[i].len > 0.5 && angDiff(legs[i].th, alpha) < TOL) cur.push(i + 1);
+    else { runs.push(cur); cur = [i + 1]; }
+  }
+  runs.push(cur);
+
+  var sp = photoSpacing(points), timer = !sp, dPhoto = 0;
+  if (!timer) {
+    var sum = 0, cnt = 0;
+    for (i = 0; i < n - 1; i++) {
+      if (points[i].action === 'PHOTO' && points[i + 1].action === 'PHOTO') { sum += haversine(points[i], points[i + 1]); cnt++; }
+    }
+    dPhoto = sum / cnt;
+  }
+  /* Photo spacing in ground metres, measured in the same frame as the new points, so the front overlap matches the original plan. */
+  var dGrid = 0;
+  if (!timer) {
+    var gs = 0, gc = 0;
+    for (i = 0; i < n - 1; i++) {
+      if (points[i].action === 'PHOTO' && points[i + 1].action === 'PHOTO') { gs += Math.hypot(P[i + 1].x - P[i].x, P[i + 1].y - P[i].y); gc++; }
+    }
+    dGrid = gs / gc;
+  }
+  var lines = [];
+  runs.forEach(function (r) {
+    if (r.length < 2) return;
+    var use = timer ? r : r.filter(function (j) { return points[j].action === 'PHOTO'; });
+    if (use.length < 2) return;
+    var tm = 0, s0 = Infinity, s1 = -Infinity;
+    r.forEach(function (j) { tm += T[j] / r.length; });
+    use.forEach(function (j) { if (S[j] < s0) s0 = S[j]; if (S[j] > s1) s1 = S[j]; });
+    lines.push({ t: tm, s0: s0, s1: s1 });
+  });
+  if (lines.length < 2) return { error: 'Crosshatch needs a plan with at least two parallel passes.' };
+
+  var gaps = [];
+  for (i = 0; i < lines.length - 1; i++) gaps.push(Math.abs(lines[i + 1].t - lines[i].t));
+  gaps.sort(function (x, y) { return x - y; });
+  var dLine = gaps[Math.floor(gaps.length / 2)];
+  if (!(dLine > 1)) return { error: 'The passes in this plan are too close together to add a second pass.' };
+
+  var A0 = Infinity, A1 = -Infinity;
+  lines.forEach(function (l) { if (l.s0 < A0) A0 = l.s0; if (l.s1 > A1) A1 = l.s1; });
+  var sEnd = S[n - 1], tEnd = T[n - 1];
+  var extent = A1 - A0, steps = Math.max(1, Math.ceil(extent / dLine - 0.05)), dStep = extent / steps;
+  var B0 = A0, B1 = A1;
+  A0 -= extraLines * dStep; A1 += extraLines * dStep; steps += 2 * extraLines;
+
+  /* Second-pass lines are evenly spaced across the survey, never further apart than the original line pitch,
+     so the side overlap stays at least what the original plan has. */
+  var orders = [], linePitch = dStep;
+  var lastPh = -1;
+  for (i = n - 1; i >= 0; i--) { if (points[i].action === 'PHOTO') { lastPh = i; break; } }
+  var sMid = lastPh >= 0 ? (S[lastPh] + sEnd) / 2 : NaN;
+  if (centred && !timer) {
+    /* Centred layout (oblique mode): the lines lie symmetrically about the centre of the survey, spaced no wider than the plan's own
+       line pitch, and the photo points on each line are centred on that line, so the second pass is fitted to the survey with no extra length.
+       The drone starts with whichever outer line is nearer to the End waypoint. */
+    var nInt = Math.max(1, Math.ceil((B1 - B0) / dLine - 1e-6)), pc = (B1 - B0) / nInt, asc2 = [];
+    for (var j3 = 0; j3 <= nInt; j3++) asc2.push(B0 + j3 * pc);
+    orders.push(asc2, asc2.slice().reverse());
+    linePitch = pc;
+  } else if (!timer && isFinite(sMid)) {
+    /* The first second-pass line sits exactly midway between the last photo point and the End waypoint (along the line direction).
+       The other lines follow at one even pitch, never wider than the original line pitch, until the whole survey is covered.
+       If the End waypoint is at the edge of the survey they all lie on one side; otherwise the drone flies the nearer side first. */
+    var kLo = Math.max(0, Math.ceil((sMid - B0) / dLine - 0.05)), kHi = Math.max(0, Math.ceil((B1 - sMid) / dLine - 0.05));
+    var pLo = kLo ? (sMid - B0) / kLo : 0, pHi = kHi ? (B1 - sMid) / kHi : 0, pit = Math.max(pLo, pHi);
+    var lo = [], hi = [], q;
+    for (q = 1; q <= kLo; q++) lo.push(sMid - q * pit);
+    for (q = 1; q <= kHi; q++) hi.push(sMid + q * pit);
+    var loFirst = kLo === 0 ? false : kHi === 0 ? true : (sMid - B0) <= (B1 - sMid);
+    orders.push([sMid].concat(loFirst ? lo.concat(hi) : hi.concat(lo)));
+    linePitch = pit;
+  } else {
+    var asc = [];
+    for (var jj = 0; jj <= steps; jj++) asc.push(A0 + jj * dStep);
+    orders.push(asc, asc.slice().reverse());
+  }
+
+  /* height of a new point: read off a smooth surface fitted to the plan's own heights.
+     Where a new point sits on an original waypoint it takes that waypoint's height; estimates stay within 2 m of the original range. */
+  var hm = heightModel(points, P), hasH = hm.has, heightAt = hm.at;
+  var tpl = points[n - 1];
+  function make(s, t, action) {
+    var x = s * ux + t * vx, y = s * uy + t * vy, o = {}, key;
+    for (key in tpl) o[key] = tpl[key];
+    o.action = action; o.hoverTime = 0;
+    o.lat = lat0 + y / mLat; o.lng = lng0 + x / mLng;
+    var h = heightAt(x, y);
+    if (h !== undefined) o.height = h;
+    return o;
+  }
+
+  function build(order) {
+    var out = [], prevT = tEnd, prevS = sEnd, passes = 0, used = [];
+    for (var j = 0; j < order.length; j++) {
+      var s = order[j];
+      var tlo = Infinity, thi = -Infinity, sIn = Math.min(Math.max(s, B0), B1);   /* extra lines beyond the survey reuse the width of the outermost one */
+      lines.forEach(function (l) {
+        if (sIn >= l.s0 - dLine / 2 && sIn <= l.s1 + dLine / 2) { if (l.t < tlo) tlo = l.t; if (l.t > thi) thi = l.t; }
+      });
+      if (!(thi - tlo > 1)) continue;
+      var up = Math.abs(prevT - tlo) <= Math.abs(prevT - thi), from = up ? tlo : thi, to = up ? thi : tlo, dir = up ? 1 : -1;
+      var seq = [];
+      if (timer) {
+        var over = extPhotos * (o.spacing || 15);
+      seq.push([from - dir * over, 'NONE'], [to + dir * over, 'NONE']);
+      } else {
+        /* photos keep the spacing of the original plan; any spare length is split between the two ends */
+        var step = dGrid || dPhoto, len = thi - tlo, kk = Math.max(1, Math.round(len / step)), lead = (len - kk * step) / 2 + shift * step;
+        seq.push([from + dir * lead - dir * (1 + extPhotos) * step, 'NONE']);
+        for (k = -extPhotos; k <= kk + extPhotos; k++) seq.push([from + dir * (lead + k * step), 'PHOTO']);
+        seq.push([from + dir * (lead + kk * step) + dir * (1 + extPhotos) * step, 'NONE']);
+      }
+      seq.forEach(function (q) {
+        if (Math.hypot(s - prevS, q[0] - prevT) < 1) return;   /* already there, for example the End waypoint */
+        var np = make(s, q[0], q[1]);
+        if (dropLeadOut && !timer && q === seq[seq.length - 1]) np._leadOut = true;
+        out.push(np); prevS = s; prevT = q[0];
+      });
+      passes++;
+    }
+    return { out: out, passes: passes };
+  }
+  /* start at whichever edge of the survey is quicker to reach from the End waypoint */
+  function firstLeg(r) { return r.out.length ? Math.hypot(r.out[0].lat - points[n - 1].lat, r.out[0].lng - points[n - 1].lng) : Infinity; }
+  var runs2 = orders.map(build), chosen = runs2[0];
+  runs2.forEach(function (r) { if (firstLeg(r) < firstLeg(chosen)) chosen = r; });
+  var out = chosen.out, passes = chosen.passes;
+  /* The drone lines up on the lead-in of the next line, so every lead-out except the last (the End of the plan) can go. */
+  out = out.filter(function (p, idx) { var keep = !p._leadOut || idx === out.length - 1; delete p._leadOut; return keep; });
+  if (!out.length) return { error: 'No second pass could be placed on this plan.' };
+  var cS = (B0 + B1) / 2, tAll = lines.map(function (l) { return l.t; }), cT = (Math.min.apply(null, tAll) + Math.max.apply(null, tAll)) / 2;
+  var cX = cS * ux + cT * vx, cY = cS * uy + cT * vy, cH = heightAt(cX, cY);
+  return { points: out, info: { centre: { lat: lat0 + cY / mLat, lng: lng0 + cX / mLng, height: cH }, extended: extPhotos > 0, passes: passes, added: out.length, linePitch: linePitch,  photoSpacing: dGrid || dPhoto, timer: timer, bearing: ((90 - alpha / rad) % 180 + 180) % 180 } };
+}
+
+/* Ground footprint of a camera pitched `pitch` degrees below the horizon at height h, for the Potensic Atom 2 (79.4 degree diagonal
+   field of view, 4:3 frame, long side across the flight line). Overlap is measured on the whole frame. Along the line the frame
+   reaches from h / tan(pitch + a) to h / tan(pitch - a) ahead of the drone, where a is half the vertical field of view. Across the
+   line the footprint is a trapezoid, and its width is taken at the middle of the frame.
+   Returns the longest photo spacing and line spacing that keep the given overlap (front, side), and the photo spacing that
+   gives exactly 80% (frontMin). `centre` (default 1) scales the part of the frame that is used. */
+function obliqueFootprint(h, pitch, overlap, centre) {
+  var rad = Math.PI / 180, f = centre || 1, tanD = Math.tan(79.4 / 2 * rad), tanW = 0.8 * tanD, tanH = 0.6 * tanD;
+  var th = Math.abs(pitch) * rad, a = Math.atan(f * tanH);
+  var along = h / Math.tan(th - a) - h / Math.tan(th + a);
+  var across = 2 * f * tanW * h / Math.sin(th);
+  var gap = 1 - (overlap == null ? 0.75 : overlap);
+  return { along: along, across: across, front: along * gap, side: across * gap, frontMin: along * 0.2 };
+}
+
+/* Oblique correction, step 1: re-space the survey for the tilted camera.
+   Keeps the area covered by the DroneTM photo points (the same line direction, the same first line, the same ends of each line)
+   and lays the photo points and lines out again at the spacing that gives 75% front and side overlap.
+   Heights come from the thin-plate spline fitted to the DroneTM heights. Returns { points, info } or { error }. */
+function obliqueReplan(points, opts) {
+  var o = opts || {}, n = points.length, i, k, rad = Math.PI / 180;
+  if (n < 4) return { error: 'Not enough waypoints to re-space.' };
+  var photos = points.filter(function (p) { return p.action === 'PHOTO' && isFinite(p.height); });
+  if (photos.length < 4) return { error: 'No photo points to re-space.' };
+
+  var lat0 = 0, lng0 = 0;
+  points.forEach(function (p) { lat0 += p.lat / n; lng0 += p.lng / n; });
+  var e2 = 0.00669437999014, a = 6378137, sphi = Math.sin(lat0 * rad), w = Math.sqrt(1 - e2 * sphi * sphi);
+  var mLat = a * (1 - e2) / (w * w * w) * rad, mLng = a / w * Math.cos(lat0 * rad) * rad;
+  var P = points.map(function (p) { return { x: (p.lng - lng0) * mLng, y: (p.lat - lat0) * mLat }; });
+
+  var legs = [];
+  for (i = 0; i < n - 1; i++) { var dx = P[i + 1].x - P[i].x, dy = P[i + 1].y - P[i].y; legs.push({ len: Math.hypot(dx, dy), th: Math.atan2(dy, dx) }); }
+  function axisOf(set) {
+    var sx = 0, sy = 0;
+    set.forEach(function (l) { sx += l.len * Math.cos(2 * l.th); sy += l.len * Math.sin(2 * l.th); });
+    return 0.5 * Math.atan2(sy, sx);
+  }
+  function angDiff(th, al) { var d = th - al; d -= Math.PI * Math.round(d / Math.PI); return Math.abs(d); }
+  var moving = legs.filter(function (l) { return l.len > 0.5; });
+  if (!moving.length) return { error: 'Could not find the survey lines.' };
+  var alpha = axisOf(moving), TOL = 15 * rad;
+  for (k = 0; k < 3; k++) {
+    var near = moving.filter(function (l) { return angDiff(l.th, alpha) < TOL; });
+    if (!near.length) break;
+    alpha = axisOf(near);
+  }
+  var ux = Math.cos(alpha), uy = Math.sin(alpha), vx = -uy, vy = ux;
+  var S = P.map(function (p) { return p.x * ux + p.y * uy; }), T = P.map(function (p) { return p.x * vx + p.y * vy; });
+
+  var runs = [], cur = [0];
+  for (i = 0; i < n - 1; i++) {
+    if (legs[i].len > 0.5 && angDiff(legs[i].th, alpha) < TOL) cur.push(i + 1);
+    else { runs.push(cur); cur = [i + 1]; }
+  }
+  runs.push(cur);
+  var lines = [];
+  runs.forEach(function (r) {
+    var ph = r.filter(function (j) { return points[j].action === 'PHOTO'; });
+    if (ph.length < 2) return;
+    var tm = 0, s0 = Infinity, s1 = -Infinity;
+    r.forEach(function (j) { tm += T[j] / r.length; });
+    ph.forEach(function (j) { if (S[j] < s0) s0 = S[j]; if (S[j] > s1) s1 = S[j]; });
+    lines.push({ t: tm, s0: s0, s1: s1, dir: S[ph[ph.length - 1]] >= S[ph[0]] ? 1 : -1 });
+  });
+  if (lines.length < 2) return { error: 'Needs at least two survey lines.' };
+  var tSign = lines[lines.length - 1].t >= lines[0].t ? 1 : -1;
+  for (i = 1; i < lines.length; i++) { if ((lines[i].t - lines[i - 1].t) * tSign <= 0) return { error: 'The survey lines are not in order.' }; }
+
+  var h = Infinity, pitch = photos[0].gimbalPitch;
+  photos.forEach(function (p) { if (p.height < h) h = p.height; });
+  if (!(h > 1) || !isFinite(pitch)) return { error: 'Missing height or gimbal pitch.' };
+  var fp = obliqueFootprint(h, pitch, o.overlap == null ? 0.75 : o.overlap);
+  if (!(fp.front > 1) || !(fp.side > 1)) return { error: 'Could not work out the photo footprint.' };
+
+  var tFirst = lines[0].t, tLast = lines[lines.length - 1].t, extent = Math.abs(tLast - tFirst);
+  var nInt = Math.max(1, Math.ceil(extent / fp.side - 1e-6)), pitchT = extent / nInt;
+  function range(t) {   /* start and end of the photo points at this position across the lines, read between the original lines */
+    var lo = lines[0], hi = lines[lines.length - 1], m;
+    if ((t - lo.t) * tSign <= 0) return [lo.s0, lo.s1];
+    if ((t - hi.t) * tSign >= 0) return [hi.s0, hi.s1];
+    for (m = 0; m < lines.length - 1; m++) {
+      if ((t - lines[m + 1].t) * tSign <= 0) {
+        var f = (t - lines[m].t) / (lines[m + 1].t - lines[m].t);
+        return [lines[m].s0 + f * (lines[m + 1].s0 - lines[m].s0), lines[m].s1 + f * (lines[m + 1].s1 - lines[m].s1)];
+      }
+    }
+    return [hi.s0, hi.s1];
+  }
+
+  var hm = heightModel(points, P), tpl = points[0], out = [], frontUsed = 0, nPh = 0;
+  function make(s, t, action) {
+    var x = s * ux + t * vx, y = s * uy + t * vy, q = {}, key;
+    for (key in tpl) q[key] = tpl[key];
+    q.action = action; q.hoverTime = 0; q.lat = lat0 + y / mLat; q.lng = lng0 + x / mLng;
+    var hh = hm.at(x, y);
+    if (hh !== undefined) q.height = hh;
+    return q;
+  }
+  for (var j = 0; j <= nInt; j++) {
+    var t = tFirst + tSign * j * pitchT, rg = range(t), dir = (j % 2 === 0 ? 1 : -1) * lines[0].dir;
+    var from = dir > 0 ? rg[0] : rg[1], len = Math.abs(rg[1] - rg[0]);
+    var kk = Math.max(1, Math.ceil(len / fp.front - 1e-6)), st = len / kk;
+    if (st < fp.frontMin) {
+      /* the even fit would give more than 80% front overlap: space the photos out to 80% instead, centred on the line */
+      st = fp.frontMin; kk = Math.max(1, Math.ceil(len / st - 1e-6)); from -= dir * (kk * st - len) / 2;
+    }
+    if (st > frontUsed) frontUsed = st;
+    out.push(make(from - dir * st, t, 'NONE'));
+    for (k = 0; k <= kk; k++) { out.push(make(from + dir * k * st, t, 'PHOTO')); nPh++; }
+    out.push(make(from + dir * (kk + 1) * st, t, 'NONE'));
+  }
+  return { points: out, info: { lines: nInt + 1, photos: nPh, spacing: frontUsed, linePitch: pitchT, maxSpacing: fp.front, maxLinePitch: fp.side, height: h } };
+}
+
+/* Oblique correction for a gimbal pitched at -45 degrees.
+   A camera tilted 45 degrees forward looks at the ground ahead of the drone, a horizontal distance of height / tan(45) = height.
+   DroneTM places the photo points as if the camera looked straight down, so every pass is moved back along its own direction of
+   travel by the height of its first photo waypoint. Photo spacing within a pass is unchanged.
+   Heights: a moved point that still lies within the original line keeps the heights DroneTM set (read along that line);
+   one that moves past the ends of the line, and every point of an added second pass, is read from the thin-plate spline. */
+function obliqueDetect(points) {
+  var pts = points.filter(function (p) { return p.action === 'PHOTO'; });
+  if (!pts.length) pts = points;
+  return pts.length > 0 && pts.every(function (p) { return isFinite(p.gimbalPitch) && Math.abs(p.gimbalPitch + 45) < 0.5; });
+}
+
+function obliqueCorrect(points, nBase, opts) {
+  var crossD = opts && isFinite(opts.crossShift) ? opts.crossShift : null;
+  var n = points.length, i, k, rad = Math.PI / 180;
+  nBase = Math.min(nBase == null ? n : nBase, n);
+  if (nBase < 2) return { points: points.slice(), info: { runs: 0, shifted: 0, shiftMin: 0, shiftMax: 0 } };
+
+  /* local metres, from the mean position of the original plan */
+  var lat0 = 0, lng0 = 0;
+  for (i = 0; i < nBase; i++) { lat0 += points[i].lat / nBase; lng0 += points[i].lng / nBase; }
+  var e2 = 0.00669437999014, a = 6378137, sphi = Math.sin(lat0 * rad), w = Math.sqrt(1 - e2 * sphi * sphi);
+  var mLat = a * (1 - e2) / (w * w * w) * rad, mLng = a / w * Math.cos(lat0 * rad) * rad;
+  var P = points.map(function (p) { return { x: (p.lng - lng0) * mLng, y: (p.lat - lat0) * mLat }; });
+  var hm = heightModel(points.slice(0, nBase), P.slice(0, nBase));
+
+  /* passes: runs of points that keep going the same way; a turn, or the start of the added second pass, begins a new run */
+  var runs = [], cur = [0], dir = null, TOL = 15 * rad;
+  for (i = 0; i < n - 1; i++) {
+    if (i + 1 === nBase) { runs.push({ idx: cur, dir: dir }); cur = [i + 1]; dir = null; continue; }
+    var dx = P[i + 1].x - P[i].x, dy = P[i + 1].y - P[i].y, len = Math.hypot(dx, dy), th = Math.atan2(dy, dx);
+    if (len < 0.5) { cur.push(i + 1); continue; }
+    var dd = th - (dir === null ? th : dir); dd -= 2 * Math.PI * Math.round(dd / (2 * Math.PI));
+    if (dir === null || Math.abs(dd) < TOL) { if (dir === null) dir = th; cur.push(i + 1); }
+    else { runs.push({ idx: cur, dir: dir }); cur = [i + 1]; dir = null; }
+  }
+  runs.push({ idx: cur, dir: dir });
+
+  var out = points.map(function (p) { var o = {}, key; for (key in p) o[key] = p[key]; return o; });
+  var shifted = 0, dMin = Infinity, dMax = -Infinity;
+  runs.forEach(function (r) {
+    if (r.idx.length < 2 || r.dir === null) return;
+    var ref = r.idx[0];
+    for (k = 0; k < r.idx.length; k++) { if (points[r.idx[k]].action === 'PHOTO') { ref = r.idx[k]; break; } }
+    var pitch = points[ref].gimbalPitch, h = points[ref].height;
+    if (!isFinite(h) || !isFinite(pitch) || Math.abs(pitch) < 1) return;
+    var orig = r.idx[0] < nBase;
+    var d = !orig && crossD !== null ? crossD : h / Math.tan(Math.abs(pitch) * rad), ux = Math.cos(r.dir), uy = Math.sin(r.dir);
+    /* the heights DroneTM set along this line, read in order of travel */
+    var line = orig ? r.idx.filter(function (j) { return isFinite(points[j].height); }).map(function (j) { return { s: P[j].x * ux + P[j].y * uy, h: points[j].height }; }) : [];
+    r.idx.forEach(function (j) {
+      var x = P[j].x - ux * d, y = P[j].y - uy * d, hh;
+      if (hm.has) {
+        var s = x * ux + y * uy;
+        if (line.length >= 2 && s >= line[0].s && s <= line[line.length - 1].s) {
+          for (k = 0; k < line.length - 1 && s > line[k + 1].s; k++);
+          var t = line[k + 1].s === line[k].s ? 0 : (s - line[k].s) / (line[k + 1].s - line[k].s);
+          hh = round(line[k].h + t * (line[k + 1].h - line[k].h), 1);
+        } else hh = hm.at(x, y);
+        if (hh !== undefined) out[j].height = hh;
+      }
+      out[j].lat = lat0 + y / mLat; out[j].lng = lng0 + x / mLng;
+    });
+    shifted++; if (d < dMin) dMin = d; if (d > dMax) dMax = d;
+  });
+  return { points: out, info: { runs: runs.length, shifted: shifted, shiftMin: shifted ? dMin : 0, shiftMax: shifted ? dMax : 0, crossShift: crossD } };
+}
+
+/* Plan-view geometry: north up, metres per degree from the mean latitude. */
+function planView(points) {
+  var rad = Math.PI / 180;
+  var lat0 = points.reduce(function (s, p) { return s + p.lat; }, 0) / points.length;
+  var mLat = 111132.92 - 559.82 * Math.cos(2 * lat0 * rad);
+  var mLng = 111412.84 * Math.cos(lat0 * rad);
+  var minLng = Infinity, maxLat = -Infinity, maxLng = -Infinity, minLat = Infinity;
+  points.forEach(function (p) {
+    minLng = Math.min(minLng, p.lng); maxLng = Math.max(maxLng, p.lng);
+    minLat = Math.min(minLat, p.lat); maxLat = Math.max(maxLat, p.lat);
+  });
+  var wm = (maxLng - minLng) * mLng, hm = (maxLat - minLat) * mLat;
+  var pad = 44, size = 520;
+  var s = size / Math.max(wm, hm, 1);
+  var W = wm * s + pad * 2, H = hm * s + pad * 2;
+  var xy = points.map(function (p) {
+    return { x: pad + (p.lng - minLng) * mLng * s, y: pad + (maxLat - p.lat) * mLat * s };
+  });
+  var steps = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000];
+  var longest = Math.max(wm, hm, 1), step = steps[steps.length - 1];
+  for (var i = 0; i < steps.length; i++) { if (longest / steps[i] <= 8) { step = steps[i]; break; } }
+  return { W: W, H: H, pad: pad, xy: xy, scale: s, step: step, widthM: wm, heightM: hm };
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = { parseDroneTM: parseDroneTM, convert: convert, missionStats: missionStats, planView: planView, photoSpacing: photoSpacing, utmZone: utmZone, utm: utm, utmInverse: utmInverse, crosshatch: crosshatch, obliqueDetect: obliqueDetect, obliqueCorrect: obliqueCorrect, obliqueReplan: obliqueReplan, obliqueFootprint: obliqueFootprint, haversine: haversine, heightSurface: heightSurface };
+}
+
+</script>
+<script>
+(function () {
+  var MIN_INTERVAL = 2;   /* seconds between photos */
+  var MAX_SPEED = 8, MAX_WAYPOINTS = 200;          /* top speed of the Atom 2 in normal mode, m/s */
+  var MARGIN = 0.95;      /* suggested speed is 5% under the limit */
+  var FRONT_OVERLAP = 0.75;   /* target front overlap when photos come from a timer */
+  var ALONG_M = 60;           /* ground covered along the route by one 12 MP photo at 2 cm per pixel (3000 px) */
+  var state = { suggested: null, base: null, cross: null, crossError: '', oblique: false, obl: null, points: null, trimmed: false, name: '', error: '', out: '' };
+  var downloads = null;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function num(v) { if (v === '' || v == null) return null; var n = Number(v); return isFinite(n) ? n : null; }
+  function fmtLen(m) { return m >= 1000 ? { v: (m / 1000).toFixed(2), u: 'km' } : { v: String(Math.round(m)), u: 'm' }; }
+  function fmtTime(s) { s = Math.round(s); var m = Math.floor(s / 60), r = s % 60; return m + ':' + (r < 10 ? '0' : '') + r; }
+  function fmtSize(b) { return b < 1024 ? b + ' B' : (b / 1024).toFixed(1) + ' KB'; }
+  function say(t) { $('msg').textContent = t; }
+
+  /* The route that is converted: the DroneTM plan, plus a crosshatch pass when that option is on. */
+  function applyPoints() {
+    var base = state.base, res, useObl = $('oblique').checked && state.oblique;
+    state.obl = null;
+    /* oblique correction first re-spaces the survey for the tilted camera; Crosshatch then follows that spacing */
+    if (useObl) {
+      var rp = obliqueReplan(base);
+      if (rp.error) state.obl = { replanError: rp.error }; else { base = rp.points; state.obl = { replan: rp.info }; }
+    }
+    state.planBase = base;
+    state.points = base; state.cross = null; state.crossError = '';
+    if ($('cross').checked) {
+      res = crosshatch(base, { centred: useObl, dropLeadOut: useObl });
+      if (res.error) state.crossError = res.error;
+      else { state.points = base.concat(res.points); state.cross = res.info; }
+    }
+    if (useObl) {
+      /* the second pass is moved back by the height at the centre of the survey, with the same tangent rule */
+      var cs = null, gp0 = base[0].gimbalPitch;
+      if (state.cross && state.cross.centre && isFinite(state.cross.centre.height) && isFinite(gp0)) cs = state.cross.centre.height / Math.tan(Math.abs(gp0) * Math.PI / 180);
+      var ob = obliqueCorrect(state.points, base.length, { crossShift: cs });
+      state.points = ob.points; state.obl = Object.assign(state.obl || {}, ob.info);
+    }
+    state.en = state.points.map(function (p) { return utm(p.lat, p.lng, state.zone); });
+    state.baseEn = state.base.map(function (p) { return utm(p.lat, p.lng, state.zone); });
+    /* the original route can be shown only when Oblique correction is on */
+    $('cmp').disabled = !useObl;
+    if (!useObl) $('cmp').checked = false;
+    state.view = null; state.sel = null;
+  }
+
+  function loadText(text, name) {
+    try {
+      var r = parseDroneTM(text);
+      state.base = r.points; state.trimmed = r.trimmed; state.error = '';
+      /* UTM zone comes from the first waypoint, so the grid is right wherever the plan is flown */
+      state.zone = utmZone(r.points[0].lat, r.points[0].lng);
+      state.oblique = obliqueDetect(r.points);
+      if (!state.oblique) $('oblique').checked = false;
+      applyPoints();
+      var sp = r.points[0].speed;
+      $('speed').placeholder = isFinite(sp) ? String(sp) : '5';
+      $('speedHint').textContent = isFinite(sp)
+        ? 'Leave empty to keep the ' + sp + ' m/s saved in the DroneTM file.'
+        : 'Leave empty to use 5 m/s, the speed in your Eve file.';
+    } catch (e) {
+      state.base = null; state.points = null; state.en = null; state.oblique = false; $('oblique').checked = false; $('obliqueHint').textContent = 'Available when the gimbal pitch in your DroneTM file is -45°.'; state.error = e.message;
+    }
+    state.name = name;
+    update();
+  }
+
+  function update() {
+    var status = $('status');
+    if (state.error) {
+      status.className = 'status bad';
+      status.textContent = state.error;
+    } else if (state.base) {
+      status.className = 'status';
+      status.textContent = 'Loaded ' + state.name + ' · ' + state.base.length + ' waypoints';
+    } else {
+      status.className = 'status'; status.textContent = '';
+    }
+
+    if (!state.base) {
+      $('results').hidden = true; $('empty').hidden = false; state.out = '';
+      return;
+    }
+    $('results').hidden = false; $('empty').hidden = true;
+
+    $('fixedHeight').hidden = $('heightMode').value !== 'fixed';
+
+    /* Photo points get wp_action 1, points without a photo get 0, and the heading follows the route, as in the Eve file. */
+    var res = convert(state.points, {
+      speed: num($('speed').value),
+      heightMode: $('heightMode').value,
+      fixedHeight: num($('fixedHeight').value),
+      noActionCode: 0,
+      yawMode: 'route'
+    });
+    var wps = res.waypoints;
+    state.out = JSON.stringify(wps);
+
+    /* Suggested speed: the closest pair of photo points sets the limit. */
+    var sp = photoSpacing(state.planBase || state.base), sg = $('suggest');
+    var sug = sp ? Math.min(Math.round(sp.min / MIN_INTERVAL * MARGIN * 10) / 10, MAX_SPEED) : 0;
+    if (sp && sug >= 0.1) {
+      var limit = sp.min / MIN_INTERVAL, gap = sp.min / res.speed, shown = Math.round(res.speed * 100) / 100;
+      var apart = (sp.max - sp.min) < 0.1 ? sp.min.toFixed(1) + ' m' : sp.min.toFixed(1) + ' to ' + sp.max.toFixed(1) + ' m';
+      state.suggested = sug;
+      sg.hidden = false;
+      $('sugVal').textContent = sug.toFixed(1) + ' m/s';
+      $('sugWhy').textContent = limit * MARGIN > MAX_SPEED
+        ? 'Photo points are ' + apart + ' apart, so the drone could fly up to ' + (Math.floor(limit * 100) / 100).toFixed(2) + ' m/s and still leave ' + MIN_INTERVAL + ' s between photos. The suggestion is capped at ' + MAX_SPEED + ' m/s, the Atom 2\'s top speed in normal mode.'
+        : 'Photo points are ' + apart + ' apart, so the drone must stay under ' + (Math.floor(limit * 100) / 100).toFixed(2) + ' m/s to leave ' + MIN_INTERVAL + ' s between photos. The suggestion keeps a 5% margin.';
+      var ck = $('sugCheck');
+      if (gap >= MIN_INTERVAL) {
+        ck.hidden = true;
+        ck.textContent = '';
+      } else {
+        ck.hidden = false;
+        ck.className = 'check warn';
+        ck.textContent = 'At ' + shown + ' m/s the photos are only ' + gap.toFixed(2) + ' s apart, under the ' + MIN_INTERVAL + ' s minimum. Some shots could be missed.';
+      }
+    } else if (!sp) {
+      /* No consecutive photo points: the photos come from a timer, so speed sets the distance between them. */
+      var gapM = ALONG_M * (1 - FRONT_OVERLAP), sugI = Math.min(Math.round(gapM / MIN_INTERVAL * 10) / 10, MAX_SPEED);
+      var shownI = Math.round(res.speed * 100) / 100, apartI = res.speed * MIN_INTERVAL;
+      state.suggested = sugI;
+      sg.hidden = false;
+      $('sugVal').textContent = sugI.toFixed(1) + ' m/s';
+      $('sugWhy').textContent = 'Calculated for a ' + MIN_INTERVAL + ' s photo interval. This plan has no photo points, so photos come from the timer. ' +
+        'Photos ' + gapM.toFixed(0) + ' m apart give ' + Math.round(FRONT_OVERLAP * 100) + '% front overlap with 12 MP photos at 2 cm per pixel.';
+      var ckI = $('sugCheck');
+      ckI.hidden = false;
+      ckI.className = 'check';
+      ckI.textContent = 'At ' + shownI + ' m/s, a photo every ' + MIN_INTERVAL + ' s is ' + apartI.toFixed(1) + ' m apart, a front overlap of ' +
+        Math.round((1 - apartI / ALONG_M) * 100) + '%.';
+    } else {
+      state.suggested = null;
+      sg.hidden = true;
+    }
+
+    var st = missionStats(state.points, res.speed), stBase = missionStats(state.base, res.speed);
+    var hs = wps.map(function (w) { return w.wp_height; });
+    var hmin = Math.min.apply(null, hs), hmax = Math.max.apply(null, hs);
+    var photos = wps.filter(function (w) { return w.wp_action === 1; }).length;
+    var len = fmtLen(st.length);
+    var hv = hmin === hmax ? String(Math.round(hmin * 10) / 10) : Math.round(hmin) + '–' + Math.round(hmax);
+    var lw = $('limitWarn');
+    if (wps.length > MAX_WAYPOINTS) {
+      lw.hidden = false;
+      lw.textContent = (state.base.length > MAX_WAYPOINTS
+        ? 'Your file has ' + state.base.length + ' waypoints'
+        : 'This plan has ' + wps.length + ' waypoints with the options you have turned on') +
+        '. Potensic documents a limit of ' + MAX_WAYPOINTS + ' waypoints and points of interest combined per Atom 2 mission, so Eve may not accept or fly it.' +
+        (state.base.length > MAX_WAYPOINTS ? '' : ' Turn off Crosshatch, or split the area into smaller missions.');
+    } else {
+      lw.hidden = true; lw.textContent = '';
+    }
+    $('stats').innerHTML =
+      '<div class="stat"><dt>Waypoints</dt><dd>' + wps.length + '</dd></div>' +
+      '<div class="stat"><dt>Photo points</dt><dd>' + photos + '</dd></div>' +
+      '<div class="stat"><dt>Route</dt><dd>' + len.v + '<small>' + len.u + '</small></dd></div>' +
+      '<div class="stat"><dt>Est. flight</dt><dd>' + fmtTime(st.seconds) + '<small>min</small></dd></div>' +
+      '<div class="stat"><dt>Height</dt><dd>' + hv + '<small>m</small></dd></div>';
+
+    state.wps = wps;
+    renderPlan();
+
+    /* Height range comes from the file that was just loaded, so it changes with every file. */
+    $('heightHint').textContent = stBase.hmin != null
+      ? (stBase.hmin.toFixed(1) === stBase.hmax.toFixed(1)
+          ? 'DroneTM height is ' + stBase.hmin.toFixed(1) + ' m at every point along this route.'
+          : 'DroneTM heights run from ' + stBase.hmin.toFixed(1) + ' to ' + stBase.hmax.toFixed(1) + ' m along this route.')
+      : '';
+
+    /* Crosshatch: say what was added, or why nothing was */
+    var ch = $('crossHint'), ci = state.cross;
+    if (state.crossError) ch.textContent = state.crossError;
+    else if (ci) {
+      ch.textContent = 'Adds ' + ci.passes + ' passes and ' + ci.added + ' waypoints, flown on from the End waypoint. This roughly doubles the flight time.';
+    } else ch.textContent = 'Flies the survey again across the first pass, starting from the End waypoint. This roughly doubles the flight time.';
+
+    /* Oblique correction: only offered when the plan's gimbal pitch is -45 degrees */
+    var ob = $('oblique'), oh = $('obliqueHint'), oi = state.obl;
+    ob.disabled = !state.oblique;
+    if (!state.base) oh.textContent = 'Available when the gimbal pitch in your DroneTM file is -45°.';
+    else if (!state.oblique) {
+      var gp = state.base[0].gimbalPitch;
+      oh.textContent = 'Available when the gimbal pitch in your DroneTM file is -45°.' + (isFinite(gp) ? ' This file uses ' + gp + '°.' : '');
+    } else if (oi && oi.shifted) {
+      oh.textContent = (oi.replan
+        ? 'Photo points are re-spaced to ' + oi.replan.spacing.toFixed(1) + ' m and passes to ' + oi.replan.linePitch.toFixed(1) + ' m apart, which keeps front and side overlap at about 75–80% with the camera tilted 45°. '
+        : 'The photo spacing of your file is kept' + (oi.replanError ? ' (' + oi.replanError.replace(/\.$/, '').toLowerCase() + ')' : '') + '. ') +
+        'A camera tilted 45° looks at the ground ahead of the drone, not below it, so photos taken at DroneTM\'s points would miss the start of the area being mapped. The flight path is moved back so the photos land where DroneTM planned them.';
+    } else oh.textContent = 'This file has a -45° gimbal pitch, so the camera looks ahead of the drone. Tick to re-space the photo points for the tilted camera and move each pass back so the photos land where DroneTM planned them.';
+
+    var bytes = new TextEncoder().encode(state.out).length;
+    $('size').textContent = '· ' + wps.length + ' waypoints · ' + fmtSize(bytes);
+    $('out').value = state.out;
+  }
+
+  /* file input, drag and drop */
+  function readFile(f) {
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function () { loadText(String(r.result), f.name, false); };
+    r.onerror = function () { state.base = null; state.points = null; state.en = null; state.error = 'The browser could not read ' + f.name + '.'; update(); };
+    r.readAsText(f);
+  }
+  $('file').addEventListener('change', function (e) { readFile(e.target.files[0]); e.target.value = ''; });
+  var drop = $('drop');
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function (e) { readFile(e.dataTransfer && e.dataTransfer.files[0]); });
+  $('usePaste').addEventListener('click', function () { loadText($('paste').value, 'pasted text', false); });
+
+  $('useSug').addEventListener('click', function () {
+    if (state.suggested == null) return;
+    $('speed').value = state.suggested.toFixed(1);
+    update();
+  });
+  $('cross').addEventListener('change', function () { if (state.base) applyPoints(); });
+  $('oblique').addEventListener('change', function () { if (state.base) applyPoints(); });
+  $('opts').addEventListener('input', update);
+  $('opts').addEventListener('change', update);
+
+  /* output */
+  $('copy').addEventListener('click', function () {
+    if (!state.out) return;
+    var n = state.points.length;
+    function fallback() { var o = $('out'); o.focus(); o.select(); say('Press Ctrl+C or Cmd+C to copy the selected text.'); }
+    try {
+      navigator.clipboard.writeText(state.out).then(function () { say('Copied ' + n + ' waypoints. Paste them into a file named waypoints.json.'); }, fallback);
+    } catch (e) { fallback(); }
+  });
+  $('cmp').addEventListener('change', function () { renderPlan(); });
+
+  /* KML of the converted route. Each position is rounded to the nearest centimetre in Easting and Northing,
+     then written back as WGS84 longitude and latitude, because KML itself only holds longitude and latitude. */
+  function buildKml() {
+    var wps = state.wps || [], z = state.zone, nb = (state.planBase || state.base).length, rows = [];
+    state.en.forEach(function (q, i) {
+      var e = Math.round(q.e * 100) / 100, nn = Math.round(q.n * 100) / 100, ll = utmInverse(e, nn, z);
+      rows.push({ e: e, n: nn, lat: ll.lat, lng: ll.lng, h: wps[i] ? wps[i].wp_height : 0, photo: !!(wps[i] && wps[i].wp_action === 1) });
+    });
+    function c(r) { return r.lng.toFixed(9) + ',' + r.lat.toFixed(9) + ',' + (Math.round(r.h * 10) / 10); }
+    function line(name, style, list) {
+      return '<Placemark><name>' + name + '</name><styleUrl>#' + style + '</styleUrl><LineString><altitudeMode>relativeToGround</altitudeMode><coordinates>' +
+        list.map(c).join(' ') + '</coordinates></LineString></Placemark>';
+    }
+    var secondPass = state.cross && nb < rows.length;
+    var out = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>' +
+      '<name>' + esc(state.name || 'waypoints') + ' converted</name>' +
+      '<description>' + esc('WGS84 / UTM ' + z.label + '. Easting and Northing are rounded to the nearest 0.01 m. Heights are in metres, as in waypoints.json (relative to take-off).') + '</description>' +
+      '<Style id="route"><LineStyle><color>ffb5987b</color><width>3</width></LineStyle></Style>' +
+      '<Style id="route2"><LineStyle><color>ff2f8cf0</color><width>3</width></LineStyle></Style>' +
+      '<Style id="photo"><IconStyle><color>ff766b0a</color><scale>0.8</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0.7</scale></LabelStyle></Style>' +
+      '<Style id="nophoto"><IconStyle><color>ffb0b0b0</color><scale>0.6</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><scale>0.7</scale></LabelStyle></Style>' +
+      '<Folder><name>Route</name>' +
+      (secondPass ? line('First pass', 'route', rows.slice(0, nb)) + line('Second pass', 'route2', rows.slice(nb - 1)) : line('Flight path', 'route', rows)) +
+      '</Folder><Folder><name>Waypoints</name>';
+    rows.forEach(function (r, i) {
+      var nm = (i + 1) + (i === 0 ? ' start' : i === rows.length - 1 ? ' end' : '');
+      out += '<Placemark><name>' + nm + '</name><styleUrl>#' + (r.photo ? 'photo' : 'nophoto') + '</styleUrl><ExtendedData>' +
+        '<Data name="Easting"><value>' + r.e.toFixed(2) + '</value></Data>' +
+        '<Data name="Northing"><value>' + r.n.toFixed(2) + '</value></Data>' +
+        '<Data name="Zone"><value>' + z.label + '</value></Data>' +
+        '<Data name="Height"><value>' + (Math.round(r.h * 10) / 10) + '</value></Data>' +
+        '<Data name="Photo"><value>' + (r.photo ? 'yes' : 'no') + '</value></Data></ExtendedData>' +
+        '<Point><altitudeMode>relativeToGround</altitudeMode><coordinates>' + c(r) + '</coordinates></Point></Placemark>';
+    });
+    return out + '</Folder></Document></kml>';
+  }
+  /* The viewer's save dialog only accepts certain file types and .kml is not one of them, so the KML goes in a
+     zip. A plain zip with no compression: CRC-32, one entry, written by hand. */
+  var CRC = null;
+  function crc32(b) {
+    if (!CRC) { CRC = []; for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; CRC[n] = c >>> 0; } }
+    var r = 0xFFFFFFFF; for (var i = 0; i < b.length; i++) r = CRC[(r ^ b[i]) & 255] ^ (r >>> 8);
+    return (r ^ 0xFFFFFFFF) >>> 0;
+  }
+  function makeZip(name, text) {
+    var enc = new TextEncoder(), nm = enc.encode(name), data = enc.encode(text), crc = crc32(data), d = new Date();
+    var dt = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate(), tm = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+    var lh = 30 + nm.length, cd = 46 + nm.length, buf = new Uint8Array(lh + data.length + cd + 22), v = new DataView(buf.buffer);
+    v.setUint32(0, 0x04034b50, true); v.setUint16(4, 20, true); v.setUint16(6, 0x0800, true); v.setUint16(8, 0, true);
+    v.setUint16(10, tm, true); v.setUint16(12, dt, true); v.setUint32(14, crc, true); v.setUint32(18, data.length, true); v.setUint32(22, data.length, true);
+    v.setUint16(26, nm.length, true); v.setUint16(28, 0, true); buf.set(nm, 30); buf.set(data, lh);
+    var o = lh + data.length;
+    v.setUint32(o, 0x02014b50, true); v.setUint16(o + 4, 20, true); v.setUint16(o + 6, 20, true); v.setUint16(o + 8, 0x0800, true); v.setUint16(o + 10, 0, true);
+    v.setUint16(o + 12, tm, true); v.setUint16(o + 14, dt, true); v.setUint32(o + 16, crc, true); v.setUint32(o + 20, data.length, true); v.setUint32(o + 24, data.length, true);
+    v.setUint16(o + 28, nm.length, true); buf.set(nm, o + 46);
+    var e = o + cd;
+    v.setUint32(e, 0x06054b50, true); v.setUint16(e + 8, 1, true); v.setUint16(e + 10, 1, true); v.setUint32(e + 12, cd, true); v.setUint32(e + 16, lh + data.length, true);
+    return buf;
+  }
+  $('saveKml').addEventListener('click', function () {
+    if (!state.en) return;
+    var kml = buildKml();
+    function viaLink() {
+      try {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' }));
+        a.download = 'waypoints.kml';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        say('Saved waypoints.kml with ' + state.en.length + ' waypoints.');
+      } catch (e) { say('This view cannot save files.'); }
+    }
+    if (downloads) {
+      downloads.save({ filename: 'waypoints-kml.zip', data: makeZip('waypoints.kml', kml) }).then(function () {
+        say('Saved waypoints-kml.zip with ' + state.en.length + ' waypoints. Unzip it to get waypoints.kml, or rename it to .kmz to open it directly in Google Earth.');
+      }, function (e) { say(e && e.code === 'declined' ? 'Save cancelled.' : 'This view cannot save files. Allow the save or try again.'); });
+    } else viaLink();
+  });
+
+  $('save').addEventListener('click', function () {
+    if (!state.out || !downloads) return;
+    downloads.save({ filename: 'waypoints.json', data: state.out }).then(function () {
+      say('Saved waypoints.json.');
+    }, function (e) {
+      say(e && e.code === 'declined' ? 'Save cancelled.' : 'This view cannot save files. Use Copy JSON instead.');
+    });
+  });
+
+  try {
+    if (window.claude && window.claude.use) {
+      window.claude.use('downloads').then(function (d) {
+        if (d) { downloads = d; $('save').hidden = false; }
+      }, function () {});
+    }
+  } catch (e) {}
+
+  /* ---------- Route plan: UTM grid, zoom and pan ---------- */
+  var NICE = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000, 10000];
+  var planEl = $('plan'), svgEl = $('planSvg');
+  var pointers = {}, gesture = null;
+
+  function grp(v, d) {
+    var parts = Math.abs(v).toFixed(d || 0).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return (v < 0 ? '-' : '') + parts.join('.');
+  }
+  function planSize() { return { W: Math.max(240, planEl.clientWidth), H: Math.max(240, planEl.clientHeight) }; }
+  function f1(x) { return x.toFixed(1); }
+
+  function cmpOn() { return $('cmp').checked && !$('cmp').disabled && !!state.baseEn; }
+  function extent() {
+    var r = { e0: Infinity, e1: -Infinity, n0: Infinity, n1: -Infinity };
+    var pts = cmpOn() ? state.en.concat(state.baseEn) : state.en;
+    pts.forEach(function (p) {
+      if (p.e < r.e0) r.e0 = p.e; if (p.e > r.e1) r.e1 = p.e;
+      if (p.n < r.n0) r.n0 = p.n; if (p.n > r.n1) r.n1 = p.n;
+    });
+    return r;
+  }
+  function fitView(W, H) {
+    var x = extent(), padL = 84, padR = 18, padT = 44, padB = 76;
+    var aw = W - padL - padR, ah = H - padT - padB;
+    var wm = Math.max(x.e1 - x.e0, 10), hm = Math.max(x.n1 - x.n0, 10);
+    var s = Math.min(aw / wm, ah / hm);
+    var ce = (x.e0 + x.e1) / 2, cn = (x.n0 + x.n1) / 2;
+    return { s: s, s0: s, cx: ce - (padL + aw / 2 - W / 2) / s, cy: cn + (padT + ah / 2 - H / 2) / s };
+  }
+  function clampScale(v, s) { return Math.min(Math.max(s, v.s0 * 0.5), v.s0 * 80); }
+  function zoomAt(px, py, factor) {
+    var v = state.view; if (!v) return;
+    var sz = planSize(), ns = clampScale(v, v.s * factor);
+    var wx = v.cx + (px - sz.W / 2) / v.s, wy = v.cy - (py - sz.H / 2) / v.s;
+    v.cx = wx - (px - sz.W / 2) / ns; v.cy = wy + (py - sz.H / 2) / ns; v.s = ns;
+    renderPlan();
+  }
+
+  function renderPlan() {
+    if (!state.points || !state.en || $('results').hidden) return;
+    var sz = planSize(), W = sz.W, H = sz.H;
+    if (!state.view) state.view = fitView(W, H);
+    var v = state.view, en = state.en, wps = state.wps || [], n = en.length, i;
+    function X(e) { return (e - v.cx) * v.s + W / 2; }
+    function Y(nn) { return H / 2 - (nn - v.cy) * v.s; }
+    var g = '', lab = '';
+
+    /* grid at round Easting and Northing values, never closer than 80 px */
+    var step = NICE[NICE.length - 1];
+    for (i = 0; i < NICE.length; i++) { if (NICE[i] * v.s >= 80) { step = NICE[i]; break; } }
+    var e0 = v.cx - W / 2 / v.s, e1 = v.cx + W / 2 / v.s, n0 = v.cy - H / 2 / v.s, n1 = v.cy + H / 2 / v.s;
+    for (var e = Math.ceil(e0 / step) * step; e <= e1; e += step) {
+      var x = X(e);
+      g += '<line class="grid-line" x1="' + f1(x) + '" y1="0" x2="' + f1(x) + '" y2="' + H + '"/>';
+      if (x > 34 && x < W - 34) lab += '<text x="' + f1(x) + '" y="' + (H - 8) + '" text-anchor="middle">' + grp(e) + ' E</text>';
+    }
+    for (var nn = Math.ceil(n0 / step) * step; nn <= n1; nn += step) {
+      var y = Y(nn);
+      g += '<line class="grid-line" x1="0" y1="' + f1(y) + '" x2="' + W + '" y2="' + f1(y) + '"/>';
+      if (y > 14 && y < H - 26) lab += '<text x="6" y="' + f1(y - 4) + '">' + grp(nn) + ' N</text>';
+    }
+
+    /* original DroneTM route, drawn first so the converted route sits on top */
+    var cmp = cmpOn();
+    if (cmp) {
+      g += '<polyline class="orig" points="' + state.baseEn.map(function (q) { return f1(X(q.e)) + ',' + f1(Y(q.n)); }).join(' ') + '"/>';
+      state.baseEn.forEach(function (q, k) {
+        var ox = X(q.e), oy = Y(q.n);
+        if (ox < -20 || ox > W + 20 || oy < -20 || oy > H + 20) return;
+        g += '<circle class="pt-orig" cx="' + f1(ox) + '" cy="' + f1(oy) + '" r="4.2"><title>DroneTM point ' + (k + 1) + ' · E ' + grp(q.e, 0) + ' · N ' + grp(q.n, 0) + '</title></circle>';
+      });
+    }
+
+    /* route and direction arrows */
+    var pl = [];
+    for (i = 0; i < n; i++) pl.push(f1(X(en[i].e)) + ',' + f1(Y(en[i].n)));
+    var nb = (state.planBase || state.base).length;
+    if (state.cross && nb < n) {
+      g += '<polyline class="route" points="' + pl.slice(0, nb).join(' ') + '"/>' +
+        '<polyline class="route route2" points="' + pl.slice(nb - 1).join(' ') + '"/>';
+    } else g += '<polyline class="route" points="' + pl.join(' ') + '"/>';
+    var sp = photoSpacing(state.points), typ = sp ? sp.min * v.s : 40;
+    var every = Math.max(1, Math.ceil(90 / Math.max(typ, 1)));
+    for (i = 0; i < n - 1; i++) {
+      var ax = X(en[i].e), ay = Y(en[i].n), bx = X(en[i + 1].e), by = Y(en[i + 1].n);
+      var L = Math.hypot(bx - ax, by - ay);
+      if (L < 34 || !(i % every === 0 || L >= 120)) continue;
+      var mx = (ax + bx) / 2, my = (ay + by) / 2;
+      if (mx < -10 || mx > W + 10 || my < -10 || my > H + 10) continue;
+      var ang = Math.atan2(by - ay, bx - ax), ca = Math.cos(ang), sa = Math.sin(ang);
+      g += '<polygon class="arrow" points="' + [[6, 0], [-4, 4], [-4, -4]].map(function (p) {
+        return f1(mx + p[0] * ca - p[1] * sa) + ',' + f1(my + p[0] * sa + p[1] * ca);
+      }).join(' ') + '"/>';
+    }
+
+    /* waypoints, with numbers thinned to keep them legible */
+    var every2 = 100, cands = [1, 2, 5, 10, 20, 50, 100];
+    for (i = 0; i < cands.length; i++) { if (cands[i] * typ >= 26) { every2 = cands[i]; break; } }
+    var nums = '';
+    for (i = 0; i < n; i++) {
+      var qx = X(en[i].e), qy = Y(en[i].n);
+      if (qx < -20 || qx > W + 20 || qy < -20 || qy > H + 20) continue;
+      var photo = wps[i] && wps[i].wp_action === 1;
+      g += '<circle class="' + (photo ? 'pt-photo' : 'pt-none') + '" cx="' + f1(qx) + '" cy="' + f1(qy) + '" r="4.2"><title>Point ' + (i + 1) +
+        ' · E ' + grp(en[i].e, 0) + ' · N ' + grp(en[i].n, 0) + (wps[i] ? ' · ' + wps[i].wp_height + ' m' : '') + '</title></circle>';
+      if (i > 0 && i < n - 1 && (i + 1) % every2 === 0) nums += '<text x="' + f1(qx + 7) + '" y="' + f1(qy + 3.5) + '">' + (i + 1) + '</text>';
+    }
+    g += nums;
+    [[0, 'START'], [n - 1, 'END']].concat(state.cross && nb < n ? [[nb - 1, '2ND PASS']] : []).forEach(function (t) {
+      var qx = X(en[t[0]].e), qy = Y(en[t[0]].n);
+      g += '<circle class="ring" cx="' + f1(qx) + '" cy="' + f1(qy) + '" r="8"/><text class="dark" x="' + f1(qx) + '" y="' + f1(qy + 22) + '" text-anchor="middle">' + t[1] + '</text>';
+    });
+    if (state.sel != null && state.sel < n) g += '<circle class="sel" cx="' + f1(X(en[state.sel].e)) + '" cy="' + f1(Y(en[state.sel].n)) + '" r="11"/>';
+
+    /* scale bar, north arrow, axis labels */
+    var sbLen = 0.5, SB = [0.5].concat(NICE);
+    for (i = 0; i < SB.length; i++) { if (SB[i] * v.s <= 140) sbLen = SB[i]; }
+    var bx2 = W - 16, bx1 = bx2 - sbLen * v.s, byy = H - 32;
+    g += '<path class="scale" d="M' + f1(bx1) + ',' + (byy - 5) + 'V' + byy + 'H' + f1(bx2) + 'V' + (byy - 5) + '"/>' +
+      '<text class="dark" x="' + f1((bx1 + bx2) / 2) + '" y="' + (byy - 9) + '" text-anchor="middle">' + sbLen + ' m</text>';
+    var nx = W - 24, ny = 38;
+    g += '<polygon class="north" points="' + nx + ',' + (ny - 16) + ' ' + (nx + 7) + ',' + (ny + 8) + ' ' + nx + ',' + (ny + 3) + ' ' + (nx - 7) + ',' + (ny + 8) + '"/>' +
+      '<text class="dark" x="' + nx + '" y="' + (ny - 20) + '" text-anchor="middle">N</text>';
+    g += lab;
+
+    svgEl.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svgEl.innerHTML = g;
+    planEl.style.touchAction = v.s > v.s0 * 1.02 ? 'none' : 'pan-y';
+
+    var x2 = extent();
+    $('legend').innerHTML = '<span><i class="f"></i>Photo</span><span><i class="o"></i>No photo</span>' + (state.cross ? '<span><i class="d"></i>Second pass</span>' : '') +
+      (cmp ? '<span><i class="g"></i>Original route</span>' : '') + '<span>Grid ' + step + ' m</span><span>WGS84 / UTM ' + state.zone.label + '</span><span>' +
+      Math.round(x2.e1 - x2.e0) + ' × ' + Math.round(x2.n1 - x2.n0) + ' m</span>';
+
+    function row(label, k) {
+      return '<dt>' + label + '</dt><dd>E ' + grp(en[k].e, 0) + ' · N ' + grp(en[k].n, 0) +
+        (wps[k] ? ' · ' + wps[k].wp_height + ' m · ' + (wps[k].wp_action === 1 ? 'photo' : 'no photo') : '') + '</dd>';
+    }
+    var ro = row('Start · 1', 0) + row('End · ' + n, n - 1);
+    if (state.sel != null && state.sel < n) ro += row('Selected · ' + (state.sel + 1), state.sel);
+    $('readout').innerHTML = ro;
+  }
+
+  function pickAt(clientX, clientY) {
+    var v = state.view, en = state.en; if (!v || !en) return;
+    var rect = planEl.getBoundingClientRect(), sz = planSize(), mx = clientX - rect.left, my = clientY - rect.top, best = -1, bd = 14;
+    for (var i = 0; i < en.length; i++) {
+      var d = Math.hypot((en[i].e - v.cx) * v.s + sz.W / 2 - mx, sz.H / 2 - (en[i].n - v.cy) * v.s - my);
+      if (d < bd) { bd = d; best = i; }
+    }
+    state.sel = best >= 0 ? best : null;
+    renderPlan();
+  }
+  function startPinch() {
+    var ids = Object.keys(pointers), a = pointers[ids[0]], b = pointers[ids[1]], v = state.view, sz = planSize(), rect = planEl.getBoundingClientRect();
+    var mx = (a.x + b.x) / 2 - rect.left, my = (a.y + b.y) / 2 - rect.top;
+    gesture = { type: 'pinch', d0: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), s0: v.s,
+      wx: v.cx + (mx - sz.W / 2) / v.s, wy: v.cy - (my - sz.H / 2) / v.s };
+  }
+  planEl.addEventListener('pointerdown', function (e) {
+    if (!state.view) return;
+    pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    try { planEl.setPointerCapture(e.pointerId); } catch (x) {}
+    var ids = Object.keys(pointers);
+    if (ids.length === 1) gesture = { type: 'pan', x0: e.clientX, y0: e.clientY, cx0: state.view.cx, cy0: state.view.cy, moved: false };
+    else if (ids.length === 2) startPinch();
+  });
+  planEl.addEventListener('pointermove', function (e) {
+    if (!pointers[e.pointerId] || !gesture || !state.view) return;
+    pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    var v = state.view, sz = planSize();
+    if (gesture.type === 'pan') {
+      var dx = e.clientX - gesture.x0, dy = e.clientY - gesture.y0;
+      if (!gesture.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+      gesture.moved = true; planEl.classList.add('drag');
+      v.cx = gesture.cx0 - dx / v.s; v.cy = gesture.cy0 + dy / v.s;
+      renderPlan();
+    } else if (gesture.type === 'pinch') {
+      var ids = Object.keys(pointers); if (ids.length < 2) return;
+      var a = pointers[ids[0]], b = pointers[ids[1]], rect = planEl.getBoundingClientRect();
+      var mx = (a.x + b.x) / 2 - rect.left, my = (a.y + b.y) / 2 - rect.top;
+      var ns = clampScale(v, gesture.s0 * Math.hypot(a.x - b.x, a.y - b.y) / gesture.d0);
+      v.s = ns; v.cx = gesture.wx - (mx - sz.W / 2) / ns; v.cy = gesture.wy + (my - sz.H / 2) / ns;
+      renderPlan();
+    }
+  });
+  function endPointer(e) {
+    if (!pointers[e.pointerId]) return;
+    var g = gesture;
+    delete pointers[e.pointerId];
+    var ids = Object.keys(pointers);
+    if (g && g.type === 'pan' && !g.moved && e.type === 'pointerup') pickAt(e.clientX, e.clientY);
+    planEl.classList.remove('drag');
+    if (!ids.length) gesture = null;
+    else if (ids.length === 1 && state.view) {
+      var p = pointers[ids[0]];
+      gesture = { type: 'pan', x0: p.x, y0: p.y, cx0: state.view.cx, cy0: state.view.cy, moved: true };
+    }
+  }
+  planEl.addEventListener('pointerup', endPointer);
+  planEl.addEventListener('pointercancel', endPointer);
+  planEl.addEventListener('wheel', function (e) {
+    if (!state.view) return;
+    e.preventDefault();
+    var rect = planEl.getBoundingClientRect(), dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    zoomAt(e.clientX - rect.left, e.clientY - rect.top, Math.exp(-Math.max(-300, Math.min(300, dy)) * 0.0016));
+  }, { passive: false });
+  planEl.addEventListener('keydown', function (e) {
+    var v = state.view; if (!v) return;
+    var k = e.key, sz = planSize(), mv = 60 / v.s;
+    if (k === 'ArrowLeft') v.cx -= mv; else if (k === 'ArrowRight') v.cx += mv;
+    else if (k === 'ArrowUp') v.cy += mv; else if (k === 'ArrowDown') v.cy -= mv;
+    else if (k === '+' || k === '=') { e.preventDefault(); zoomAt(sz.W / 2, sz.H / 2, 1.4); return; }
+    else if (k === '-' || k === '_') { e.preventDefault(); zoomAt(sz.W / 2, sz.H / 2, 1 / 1.4); return; }
+    else if (k === '0') state.view = null;
+    else return;
+    e.preventDefault(); renderPlan();
+  });
+  $('zin').addEventListener('click', function () { var s = planSize(); zoomAt(s.W / 2, s.H / 2, 1.5); });
+  $('zout').addEventListener('click', function () { var s = planSize(); zoomAt(s.W / 2, s.H / 2, 1 / 1.5); });
+  $('zfit').addEventListener('click', function () { state.view = null; renderPlan(); });
+  if (window.ResizeObserver) new ResizeObserver(function () { renderPlan(); }).observe(planEl);
+
+  update();   /* start empty and wait for a file */
+})();
+</script>
+
+</body></html>
