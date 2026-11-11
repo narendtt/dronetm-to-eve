@@ -4,7 +4,7 @@ Converts a Potensic Atom 2 Drone Tasking Manager (DroneTM) flight plan into a `w
 
 The tool runs in your browser. Your flight plan is processed on your own device.
 
-> **Open the tool:** https://narendtt.github.io/DroneTM-to-Eve/
+> **Open the tool:** https://narendtt.github.io/dronetm-to-eve/
 
 ## What it does
 
