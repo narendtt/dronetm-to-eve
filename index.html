@@ -147,6 +147,9 @@
   .check { margin: 0; font-size: 14px; font-weight: 500; color: var(--accent); }
   .check.warn { color: var(--warn); background: var(--warn-bg); padding: 6px 8px; border-radius: 3px; }
   #limitWarn { margin: 0 0 10px; }
+  .gsdbox { display: grid; gap: 6px; margin-top: 6px; }
+  .gsdbox[hidden] { display: none; }
+  .gsdbox label { font-weight: 500; }
 
   /* results */
   .stats {
@@ -280,6 +283,12 @@
           <div class="field">
             <label class="tick" for="oblique"><input type="checkbox" id="oblique" disabled> Oblique correction</label>
             <p class="hint" id="obliqueHint">Available when the gimbal pitch in your DroneTM file is -45°.</p>
+            <div class="gsdbox" id="gsdBox" hidden>
+              <label for="gsd">GSD of your DroneTM plan, cm/px (recommended)</label>
+              <input class="ctl" id="gsd" type="number" min="0.1" max="20" step="0.01" inputmode="decimal" placeholder="The GSD you set in DroneTM, for example 2.0">
+              <p class="hint" id="gsdHint"></p>
+              <p class="check warn" id="gsdWarn" hidden></p>
+            </div>
           </div>
 
         </div>
@@ -873,6 +882,7 @@ function obliqueReplan(points, opts) {
 
   var h = Infinity, pitch = photos[0].gimbalPitch;
   photos.forEach(function (p) { if (p.height < h) h = p.height; });
+  if (o.height > 0) h = o.height;   /* height above the ground being photographed, when the caller knows it */
   if (!(h > 1) || !isFinite(pitch)) return { error: 'Missing height or gimbal pitch.' };
   var fp = obliqueFootprint(h, pitch, o.overlap == null ? 0.75 : o.overlap);
   if (!(fp.front > 1) || !(fp.side > 1)) return { error: 'Could not work out the photo footprint.' };
@@ -930,7 +940,7 @@ function obliqueDetect(points) {
 }
 
 function obliqueCorrect(points, nBase, opts) {
-  var crossD = opts && isFinite(opts.crossShift) ? opts.crossShift : null;
+  var crossD = opts && isFinite(opts.crossShift) ? opts.crossShift : null, aglH = opts && opts.height > 0 ? opts.height : null;
   var n = points.length, i, k, rad = Math.PI / 180;
   nBase = Math.min(nBase == null ? n : nBase, n);
   if (nBase < 2) return { points: points.slice(), info: { runs: 0, shifted: 0, shiftMin: 0, shiftMax: 0 } };
@@ -961,7 +971,7 @@ function obliqueCorrect(points, nBase, opts) {
     if (r.idx.length < 2 || r.dir === null) return;
     var ref = r.idx[0];
     for (k = 0; k < r.idx.length; k++) { if (points[r.idx[k]].action === 'PHOTO') { ref = r.idx[k]; break; } }
-    var pitch = points[ref].gimbalPitch, h = points[ref].height;
+    var pitch = points[ref].gimbalPitch, h = aglH !== null ? aglH : points[ref].height;
     if (!isFinite(h) || !isFinite(pitch) || Math.abs(pitch) < 1) return;
     var orig = r.idx[0] < nBase;
     var d = !orig && crossD !== null ? crossD : h / Math.tan(Math.abs(pitch) * rad), ux = Math.cos(r.dir), uy = Math.sin(r.dir);
@@ -1033,12 +1043,21 @@ if (typeof module !== 'undefined') {
   function say(t) { $('msg').textContent = t; }
 
   /* The route that is converted: the DroneTM plan, plus a crosshatch pass when that option is on. */
+  /* Height above ground from the GSD. Atom 2: 4000 px across the long side, 79.4 degree diagonal field of view, 4:3. */
+  function aglFromGsd() {
+    var g = parseFloat($('gsd').value);
+    if (!(g > 0)) return null;
+    return (g / 100) * 4000 / (2 * 0.8 * Math.tan(79.4 / 2 * Math.PI / 180));
+  }
   function applyPoints() {
-    var base = state.base, res, useObl = $('oblique').checked && state.oblique;
+    var base = state.base, res, useObl = $('oblique').checked && state.oblique, aglN = useObl ? aglFromGsd() : null;
+    /* GSD at nadir gives DroneTM's height above ground. A camera tilted by the gimbal pitch sees the ground at 1 / sin(pitch) times that
+       distance, so the drone flies at height x sin(pitch): the camera is then as far from the ground as DroneTM's was, and the GSD across the view is the GSD that was entered. */
+    var pitch0 = state.base[0].gimbalPitch, sinT = isFinite(pitch0) ? Math.sin(Math.abs(pitch0) * Math.PI / 180) : 1, agl = aglN ? aglN * sinT : null;
     state.obl = null;
     /* oblique correction first re-spaces the survey for the tilted camera; Crosshatch then follows that spacing */
     if (useObl) {
-      var rp = obliqueReplan(base);
+      var rp = obliqueReplan(base, { height: agl });
       if (rp.error) state.obl = { replanError: rp.error }; else { base = rp.points; state.obl = { replan: rp.info }; }
     }
     state.planBase = base;
@@ -1051,9 +1070,17 @@ if (typeof module !== 'undefined') {
     if (useObl) {
       /* the second pass is moved back by the height at the centre of the survey, with the same tangent rule */
       var cs = null, gp0 = base[0].gimbalPitch;
-      if (state.cross && state.cross.centre && isFinite(state.cross.centre.height) && isFinite(gp0)) cs = state.cross.centre.height / Math.tan(Math.abs(gp0) * Math.PI / 180);
-      var ob = obliqueCorrect(state.points, base.length, { crossShift: cs });
-      state.points = ob.points; state.obl = Object.assign(state.obl || {}, ob.info);
+      if (agl && isFinite(gp0)) cs = agl / Math.tan(Math.abs(gp0) * Math.PI / 180);
+      else if (state.cross && state.cross.centre && isFinite(state.cross.centre.height) && isFinite(gp0)) cs = state.cross.centre.height / Math.tan(Math.abs(gp0) * Math.PI / 180);
+      var ob = obliqueCorrect(state.points, base.length, { crossShift: cs, height: agl });
+      state.points = ob.points;
+      var dH = aglN ? aglN - agl : 0, lowest = null;
+      if (dH > 0.005) {
+        /* the whole route flies lower by the same amount, so it keeps the same height above the ground as DroneTM planned, less dH */
+        state.points = state.points.map(function (q) { var o = {}, key; for (key in q) o[key] = q[key]; if (isFinite(o.height)) o.height = round(Math.max(o.height - dH, 2), 1); return o; });
+      }
+      state.points.forEach(function (q) { if (isFinite(q.height) && (lowest === null || q.height < lowest)) lowest = q.height; });
+      state.obl = Object.assign(state.obl || {}, ob.info, { agl: agl, aglN: aglN, dH: dH, lowest: lowest, pitch: pitch0 });
     }
     state.en = state.points.map(function (p) { return utm(p.lat, p.lng, state.zone); });
     state.baseEn = state.base.map(function (p) { return utm(p.lat, p.lng, state.zone); });
@@ -1209,6 +1236,23 @@ if (typeof module !== 'undefined') {
         : 'The photo spacing of your file is kept' + (oi.replanError ? ' (' + oi.replanError.replace(/\.$/, '').toLowerCase() + ')' : '') + '. ') +
         'A camera tilted 45° looks at the ground ahead of the drone, not below it, so photos taken at DroneTM\'s points would miss the start of the area being mapped. The flight path is moved back so the photos land where DroneTM planned them.';
     } else oh.textContent = 'This file has a -45° gimbal pitch, so the camera looks ahead of the drone. Tick to re-space the photo points for the tilted camera and move each pass back so the photos land where DroneTM planned them.';
+    var gb = $('gsdBox'), gh = $('gsdHint'), gw = $('gsdWarn'), ag = aglFromGsd(), gv = parseFloat($('gsd').value);
+    gb.hidden = !(ob.checked && state.oblique);
+    gw.hidden = true; gw.textContent = '';
+    if (ag && oi && oi.agl) {
+      var sn = Math.sin(Math.abs(oi.pitch) * Math.PI / 180);
+      gh.textContent = 'At nadir, ' + gv + ' cm/px is a height of ' + oi.aglN.toFixed(1) + ' m above the ground (Atom 2, 4000 px wide image). With the camera tilted ' + Math.abs(oi.pitch) + '° the drone flies at ' + oi.agl.toFixed(1) + ' m (' + oi.aglN.toFixed(1) + ' m × sin ' + Math.abs(oi.pitch) + '°), the same distance from the ground as DroneTM\'s camera, so the GSD across the view is ' + gv + ' cm/px and along the view ' + (gv / sn).toFixed(2) + ' cm/px.';
+      if (oi.dH > 0.005) {
+        gw.hidden = false;
+        gw.textContent = 'All heights are lowered by ' + oi.dH.toFixed(1) + ' m from your file. The lowest waypoint is now ' + (oi.lowest == null ? '' : oi.lowest.toFixed(1) + ' m above the take-off point. ') + 'Check that the terrain and obstacles under the route leave enough clearance before flying.';
+      }
+    } else {
+      gh.textContent = 'DroneTM gives the GSD at nadir, with the camera pointing straight down. The tool uses it to find the height above the ground and to fly the tilted camera at the height that gives the same GSD across the view.';
+      if (!gb.hidden) {
+        gw.hidden = false;
+        gw.textContent = 'Enter the GSD you set in DroneTM. Without it the tool treats the heights in your file as the height above the ground, which is only right when the ground is level with the take-off point, and the GSD of your photos will not match the GSD you planned.';
+      }
+    }
 
     var bytes = new TextEncoder().encode(state.out).length;
     $('size').textContent = '· ' + wps.length + ' waypoints · ' + fmtSize(bytes);
@@ -1241,6 +1285,7 @@ if (typeof module !== 'undefined') {
   });
   $('cross').addEventListener('change', function () { if (state.base) applyPoints(); });
   $('oblique').addEventListener('change', function () { if (state.base) applyPoints(); });
+  $('gsd').addEventListener('input', function () { if (state.base) applyPoints(); });
   $('opts').addEventListener('input', update);
   $('opts').addEventListener('change', update);
 
@@ -1578,5 +1623,6 @@ if (typeof module !== 'undefined') {
   update();   /* start empty and wait for a file */
 })();
 </script>
+
 
 </body></html>
