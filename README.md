@@ -98,7 +98,7 @@ Things to know:
 
 ## Notes
 
-- **Est. flight** in the tool is distance divided by speed, so it is a minimum.
+- **Est. flight** assumes Eve stops at every waypoint, accelerates and brakes at about 2 m/s². It was calibrated on real Eve flights and excludes take-off, the climb to the first waypoint and the return home. Treat this as an estimate.
 - **Save KML** downloads a zip containing `waypoints.kml`. Unzip it, or rename the zip to `.kmz`, to open it in Google Earth. Positions are rounded to the nearest centimetre in Easting and Northing, so they can differ from `waypoints.json` by under 1 cm. (The browser's save dialog does not accept `.kml` files directly, which is why it is zipped.)
 - If you see a height or camera angle in Eve that does not look right, do not fly the mission. Check the settings in the tool and test with a small plan first.
 
