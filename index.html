@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{box-sizing:border-box}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>DroneTM to Eve Converter</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -486,11 +486,26 @@ function haversine(a, b) {
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 
+/* Eve flies each leg from a standstill to a standstill, at about 89% of the set speed, and spends time speeding up and braking.
+   Calibrated on two real Eve flights, which it reproduces to the second: 28 waypoints, 297 m, set speed 5.1 m/s: 2:06;
+   21 waypoints, 854 m, set speed 8.0 m/s: 3:10. */
+var EVE_ACCEL = 2.02;    /* m/s^2 */
+var EVE_SPEED = 0.894;   /* share of the set speed that Eve actually cruises at */
+function legSeconds(len, speed) {
+  var v = speed * EVE_SPEED;
+  var ramp = v * v / EVE_ACCEL;   /* distance needed to reach cruising speed and brake again */
+  return len >= ramp ? len / v + v / EVE_ACCEL : 2 * Math.sqrt(len / EVE_ACCEL);
+}
+
 function missionStats(points, speed) {
-  var length = 0, photos = 0, hmin = Infinity, hmax = -Infinity, hover = 0;
+  var length = 0, photos = 0, hmin = Infinity, hmax = -Infinity, hover = 0, fly = 0;
   for (var i = 0; i < points.length; i++) {
     var p = points[i];
-    if (i > 0) length += haversine(points[i - 1], p);
+    if (i > 0) {
+      var q = points[i - 1], h = haversine(q, p);
+      length += h;
+      fly += legSeconds(fin(p.height) && fin(q.height) ? Math.hypot(h, p.height - q.height) : h, speed);
+    }
     if (p.action === 'PHOTO') photos++;
     if (fin(p.height)) { hmin = Math.min(hmin, p.height); hmax = Math.max(hmax, p.height); }
     if (fin(p.hoverTime)) hover += p.hoverTime;
@@ -499,7 +514,7 @@ function missionStats(points, speed) {
     count: points.length,
     photos: photos,
     length: length,
-    seconds: length / speed + hover,
+    seconds: fly + hover,
     hmin: hmin === Infinity ? null : hmin,
     hmax: hmax === -Infinity ? null : hmax
   };
