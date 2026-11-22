@@ -29,7 +29,7 @@ The tool runs in your browser. Your flight plan is processed on your own device.
 ### 1. Create your flight plan in Drone Tasking Manager
 
 1. Go to the Drone Tasking Manager (DroneTM) website and create your mapping flight plan for the **Potensic Atom 2**.
-2. Draw the area you want to map and choose your flight settings (GSD, overlaps and gimbal angle). Under Flight mode, select Every waypoint, so that the DroneTM file has photo waypoints and does not rely on interval mode in Eve. Note the GSD, because Oblique correction needs it.
+2. Draw the area you want to map and choose your flight settings (GSD, overlaps and gimbal angle). Under **Flight mode**, select **Every waypoint**, so that the DroneTM file has photo waypoints and does not rely on interval mode in Eve. Note the GSD, because Oblique correction needs it.
 3. Download the flight plan as a `.json` file and keep it somewhere you can find it.
 
 ### 2. Create a dummy mission in Eve on iOS
