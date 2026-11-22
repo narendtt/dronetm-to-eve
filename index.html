@@ -376,7 +376,7 @@ function parseDroneTM(text) {
   if (value[0] && typeof value[0] === 'object' && 'wp_lat' in value[0]) {
     throw new Error('This file is already in Eve format (it has wp_lat and wp_lon). Drop a DroneTM file instead.');
   }
-  var RANGES = { height: [-500, 5000, 'height'], speed: [0.1, 30, 'speed'], gimbalPitch: [-90, 90, 'gimbal pitch'], hoverTime: [0, 3600, 'hover time'], yaw: [-360, 360, 'yaw'], zoomRatio: [0.1, 50, 'zoom ratio'] };
+  var RANGES = { height: [-500, 5000, 'height'], speed: [0.1, 30, 'speed'], gimbalPitch: [-90, 20, 'gimbal pitch'], hoverTime: [0, 3600, 'hover time'], yaw: [-360, 360, 'yaw'], zoomRatio: [0.1, 50, 'zoom ratio'] };
   for (var k = 0; k < value.length; k++) {
     var p = value[k], at = 'Waypoint ' + (k + 1);
     if (!p || typeof p !== 'object' || !fin(p.lat) || !fin(p.lng)) {
@@ -386,7 +386,7 @@ function parseDroneTM(text) {
     if (p.lat === 0 && p.lng === 0) throw new Error(at + ' is at lat 0, lng 0, which is not a real survey position.');
     for (var f in RANGES) {
       if (f in p && (!fin(p[f]) || p[f] < RANGES[f][0] || p[f] > RANGES[f][1])) {
-        throw new Error(at + ' has an invalid ' + RANGES[f][2] + ' (' + JSON.stringify(p[f]) + ').');
+        throw new Error(at + ' has an invalid ' + RANGES[f][2] + ' (' + JSON.stringify(p[f]) + ').' + (f === 'gimbalPitch' ? ' The Atom 2 gimbal tilts from -90° to +20°.' : ''));
       }
     }
   }
@@ -472,7 +472,7 @@ function validateWaypoints(wps) {
     if (w.wp_lat === 0 && w.wp_lon === 0) return at + ' is at lat 0, lng 0.';
     if (!fin(w.wp_height) || w.wp_height < 2 || w.wp_height > 500) return at + ' has a height of ' + w.wp_height + ' m. Eve needs a height from 2 to 500 m.';
     if (!fin(w.wp_speed) || w.wp_speed <= 0 || w.wp_speed > 30) return at + ' has an invalid speed.';
-    if (!fin(w.wp_gimbal_pitch_custom) || w.wp_gimbal_pitch_custom < -90 || w.wp_gimbal_pitch_custom > 90) return at + ' has an invalid gimbal pitch.';
+    if (!fin(w.wp_gimbal_pitch_custom) || w.wp_gimbal_pitch_custom < -90 || w.wp_gimbal_pitch_custom > 20) return at + ' has an invalid gimbal pitch. The Atom 2 gimbal tilts from -90° to +20°.';
     if (w.wp_action !== 0 && w.wp_action !== 1) return at + ' has an invalid action.';
   }
   return '';
@@ -1224,10 +1224,8 @@ if (typeof module !== 'undefined') {
 <script>
 (function () {
   var MIN_INTERVAL = 2;   /* seconds between photos */
-  var MAX_SPEED = 8, MAX_WAYPOINTS = 200;          /* top speed of the Atom 2 in normal mode, m/s */
+  var MAX_SPEED = 8, TOP_SPEED = 10, MAX_WAYPOINTS = 200;   /* highest speed suggested, to limit motion blur at photo points; top speed of the Atom 2 in normal mode (m/s) */
   var MARGIN = 0.95;      /* suggested speed is 5% under the limit */
-  var FRONT_OVERLAP = 0.75;   /* target front overlap when photos come from a timer */
-  var ALONG_M = 60;           /* ground covered along the route by one 12 MP photo at 2 cm per pixel (3000 px) */
   var state = { suggested: null, base: null, cross: null, crossError: '', oblique: false, obl: null, points: null, trimmed: false, name: '', error: '', out: '' };
   var downloads = null;
 
@@ -1325,7 +1323,8 @@ if (typeof module !== 'undefined') {
       status.textContent = state.error;
     } else if (state.base) {
       status.className = 'status';
-      status.textContent = 'Loaded ' + state.name + ' · ' + state.base.length + ' waypoints';
+      status.textContent = 'Loaded ' + state.name + ' · ' + state.base.length + ' waypoints' +
+        (photoSpacing(state.base) ? '' : '. This file has no photo points. In DroneTM, set Flight mode to Every waypoint and download it again.');
     } else {
       status.className = 'status'; status.textContent = '';
     }
@@ -1372,13 +1371,15 @@ if (typeof module !== 'undefined') {
     var sug = sp ? Math.min(Math.round(sp.min / MIN_INTERVAL * MARGIN * 10) / 10, MAX_SPEED) : 0;
     if (sp && sug >= 0.1) {
       var limit = sp.min / MIN_INTERVAL, gap = sp.min / res.speed, shown = Math.round(res.speed * 100) / 100;
-      var apart = (sp.max - sp.min) < 0.1 ? sp.min.toFixed(1) + ' m' : sp.min.toFixed(1) + ' to ' + sp.max.toFixed(1) + ' m';
       state.suggested = sug;
       sg.hidden = false;
       $('sugVal').textContent = sug.toFixed(1) + ' m/s';
-      $('sugWhy').textContent = limit * MARGIN > MAX_SPEED
-        ? 'Photo points are ' + apart + ' apart, so the drone could fly up to ' + (Math.floor(limit * 100) / 100).toFixed(2) + ' m/s and still leave ' + MIN_INTERVAL + ' s between photos. The suggestion is capped at ' + MAX_SPEED + ' m/s, the Atom 2\'s top speed in normal mode.'
-        : 'Photo points are ' + apart + ' apart, so the drone must stay under ' + (Math.floor(limit * 100) / 100).toFixed(2) + ' m/s to leave ' + MIN_INTERVAL + ' s between photos. The suggestion keeps a 5% margin.';
+      /* Only the cap needs explaining; below it the suggestion is simply the speed that keeps the photos far enough apart. */
+      var capped = limit * MARGIN > MAX_SPEED;
+      $('sugWhy').hidden = !capped;
+      $('sugWhy').textContent = capped
+        ? 'The suggestion is capped at ' + MAX_SPEED.toFixed(1) + ' m/s to limit motion blur at the photo points. The Atom 2 can fly up to ' + TOP_SPEED + ' m/s in normal mode.'
+        : '';
       var ck = $('sugCheck');
       if (gap >= MIN_INTERVAL) {
         ck.hidden = true;
@@ -1388,20 +1389,6 @@ if (typeof module !== 'undefined') {
         ck.className = 'check warn';
         ck.textContent = 'At ' + shown + ' m/s the photos are only ' + gap.toFixed(2) + ' s apart, under the ' + MIN_INTERVAL + ' s minimum. Some shots could be missed.';
       }
-    } else if (!sp) {
-      /* No consecutive photo points: the photos come from a timer, so speed sets the distance between them. */
-      var gapM = ALONG_M * (1 - FRONT_OVERLAP), sugI = Math.min(Math.round(gapM / MIN_INTERVAL * 10) / 10, MAX_SPEED);
-      var shownI = Math.round(res.speed * 100) / 100, apartI = res.speed * MIN_INTERVAL;
-      state.suggested = sugI;
-      sg.hidden = false;
-      $('sugVal').textContent = sugI.toFixed(1) + ' m/s';
-      $('sugWhy').textContent = 'Calculated for a ' + MIN_INTERVAL + ' s photo interval. This plan has no photo points, so photos come from the timer. ' +
-        'Photos ' + gapM.toFixed(0) + ' m apart give ' + Math.round(FRONT_OVERLAP * 100) + '% front overlap with 12 MP photos at 2 cm per pixel.';
-      var ckI = $('sugCheck');
-      ckI.hidden = false;
-      ckI.className = 'check';
-      ckI.textContent = 'At ' + shownI + ' m/s, a photo every ' + MIN_INTERVAL + ' s is ' + apartI.toFixed(1) + ' m apart, a front overlap of ' +
-        Math.round((1 - apartI / ALONG_M) * 100) + '%.';
     } else {
       state.suggested = null;
       sg.hidden = true;
